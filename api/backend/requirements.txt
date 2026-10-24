@@ -4,3 +4,4 @@ pandas
 numpy
 lightgbm
 scikit-learn
+httpx
