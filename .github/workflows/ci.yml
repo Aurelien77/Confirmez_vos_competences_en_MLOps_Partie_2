@@ -2,31 +2,22 @@ name: CI - Tests Backend
 
 on:
   push:
-    branches:
-      - staging
-      - stagging
+    branches: [staging, stagging]
   pull_request:
-    branches:
-      - staging
-      - stagging
+    branches: [staging, stagging]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgomp1
+        run: sudo apt-get update && sudo apt-get install -y libgomp1
 
       - name: Install Python dependencies
         run: |
@@ -35,8 +26,7 @@ jobs:
           pip install pytest httpx
 
       - name: Run tests
-        run: |
-          pytest api/backend/test_unit.py api/backend/test_integration.py -v --junitxml=test-results.xml
+        run: pytest api/backend/test_unit.py api/backend/test_integration.py -v --junitxml=test-results.xml
 
       - name: Upload test results
         if: always()
