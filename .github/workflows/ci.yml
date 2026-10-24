@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,10 +24,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r api/backend/requirements.txt
-          pip install pytest httpx
+          pip install pytest pytest-cov httpx
 
-      - name: Run tests
-        run: pytest api/backend/test_unit.py api/backend/test_integration.py -v --junitxml=test-results.xml
+      - name: Run tests with coverage
+        run: |
+          pytest api/backend/test_unit.py api/backend/test_integration.py \
+            -v \
+            --cov=api/backend \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:htmlcov \
+            --junitxml=test-results.xml
 
       - name: Upload test results
         if: always()
@@ -34,3 +42,18 @@ jobs:
         with:
           name: test-results
           path: test-results.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "## Couverture de code" >> $GITHUB_STEP_SUMMARY
+          coverage report --format=markdown >> $GITHUB_STEP_SUMMARY || true
