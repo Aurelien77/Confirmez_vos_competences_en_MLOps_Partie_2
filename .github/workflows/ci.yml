@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - staging
-      - stagging   # au cas où le nom de la branche est mal orthographié
+      - stagging
   pull_request:
     branches:
       - staging
