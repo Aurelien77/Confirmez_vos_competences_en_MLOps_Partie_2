@@ -1,6 +1,15 @@
+import os
 import pytest
 from fastapi.testclient import TestClient
 from api.backend.main import app
+
+# Vérifie si le fichier de données existe (local ou CI)
+DATA_PATHS = [
+    "df_home_credit.pkl",
+    "../../df_home_credit.pkl",
+    os.path.join(os.path.dirname(__file__), "..", "..", "df_home_credit.pkl"),
+]
+DATA_EXISTS = any(os.path.exists(p) for p in DATA_PATHS)
 
 @pytest.fixture(scope="module")
 def client():
@@ -12,6 +21,7 @@ def test_root(client):
     assert response.status_code == 200
     assert "message" in response.json()
 
+@pytest.mark.skipif(not DATA_EXISTS, reason="Fichier df_home_credit.pkl non disponible")
 def test_predict_client_id_valide(client):
     response = client.post("/predict", json={"client_id": 100002})
     assert response.status_code == 200
@@ -20,6 +30,7 @@ def test_predict_client_id_valide(client):
     assert 0.0 <= data["probabilite_defaut"] <= 1.0
     assert data["risque"] in [0, 1]
 
+@pytest.mark.skipif(not DATA_EXISTS, reason="Fichier df_home_credit.pkl non disponible")
 def test_predict_client_id_invalide(client):
     response = client.post("/predict", json={"client_id": 999999})
     assert response.status_code == 404
