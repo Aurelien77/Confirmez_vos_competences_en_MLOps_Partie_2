@@ -1,0 +1,11 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: devops/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../learning_models:/app/learning_models
+      - ../df_home_credit.pkl:/app/df_home_credit.pkl
+    restart: unless-stopped
