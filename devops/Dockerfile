@@ -2,18 +2,20 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Installation de la dépendance système pour LightGBM
+# Dépendance système pour LightGBM
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copie des dépendances
+# Dépendances Python
 COPY api/backend/requirements.txt .
-
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copie du code et des fichiers
+# Code backend + frontend
 COPY api/backend/ ./api/backend/
+COPY api/frontend/ ./api/frontend/
+
+# Fichiers de données / modèle
 COPY learning_models/ ./learning_models/
 COPY df_home_credit.pkl .
 

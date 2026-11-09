@@ -8,4 +8,5 @@ services:
     volumes:
       - ../learning_models:/app/learning_models
       - ../df_home_credit.pkl:/app/df_home_credit.pkl
+      - ../api/frontend:/app/api/frontend   # pour le hot-reload du frontend en dev
     restart: unless-stopped

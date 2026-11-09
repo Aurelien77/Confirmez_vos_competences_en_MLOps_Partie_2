@@ -5,11 +5,13 @@ import pickle
 import pandas as pd
 import numpy as np
 from contextlib import asynccontextmanager
+from fastapi.responses import FileResponse
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODEL_PATH = os.path.join(BASE_DIR, "learning_models", "modele_lgbm.pkl")
 DATA_PATH = os.path.join(BASE_DIR, "df_home_credit.pkl")
+FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend", "index.html")
 
 model = None
 df = None
@@ -47,6 +49,10 @@ class PredictionResponse(BaseModel):
     client_id: Optional[int] = None
     probabilite_defaut: float
     risque: int
+
+@app.get("/ui", response_class=FileResponse)
+def serve_frontend():
+    return FileResponse(FRONTEND_PATH)
 
 @app.get("/")
 def root():
