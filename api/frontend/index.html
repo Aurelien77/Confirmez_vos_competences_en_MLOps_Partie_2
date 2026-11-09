@@ -4,50 +4,266 @@
     <meta charset="UTF-8">
     <title>Scoring Home Credit</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
-        input, button { padding: 10px; margin: 10px 0; width: 100%; }
-        .result { margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px; }
+        body { font-family: Arial, sans-serif; max-width: 650px; margin: 40px auto; padding: 20px; }
+        h1 { text-align: center; }
+        .switch-container { text-align: center; margin: 20px 0; }
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #2196F3; }
+        input:checked + .slider:before { transform: translateX(26px); }
+        .form-section { margin-top: 20px; }
+        input, button { width: 100%; padding: 12px; margin: 8px 0; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        .result, .auth-result { margin-top: 15px; padding: 12px; background: #f9f9f9; border-radius: 5px; }
         .error { color: red; }
+        .hidden { display: none; }
+        .label { font-weight: bold; margin-bottom: 5px; display: block; }
+        .profile-box { background: #f0f8ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .log-item { border-bottom: 1px solid #eee; padding: 6px 0; font-size: 14px; }
+        .toggle-btn { background: #2196F3; }
+        .toggle-btn.admin { background: #ff9800; }
     </style>
 </head>
 <body>
     <h1>Scoring Home Credit</h1>
-    <p>Entrez un ID client (ex: 100002)</p>
 
-    <input type="number" id="clientId" placeholder="SK_ID_CURR" value="100002">
-    <button onclick="predict()">Prédire</button>
+    <div class="switch-container" id="switchContainer">
+        <span>Connexion</span>
+        <label class="switch">
+            <input type="checkbox" id="authSwitch" onchange="toggleAuth()">
+            <span class="slider"></span>
+        </label>
+        <span>Inscription</span>
+    </div>
 
-    <div id="result" class="result" style="display:none;"></div>
+    <div id="loginSection" class="form-section">
+        <div class="label">Connexion</div>
+        <input type="text" id="loginUsername" placeholder="Nom d'utilisateur">
+        <input type="password" id="loginPassword" placeholder="Mot de passe">
+        <button onclick="login()">Se connecter</button>
+    </div>
+
+    <div id="registerSection" class="form-section hidden">
+        <div class="label">Inscription</div>
+        <input type="text" id="regUsername" placeholder="Nom d'utilisateur">
+        <input type="password" id="regPassword" placeholder="Mot de passe">
+        <button onclick="register()">Créer un compte</button>
+    </div>
+
+    <div id="authResult" class="auth-result hidden"></div>
+
+    <button id="profileToggleBtn" onclick="toggleSection('profileSection')" class="toggle-btn hidden">Profil ▼</button>
+    <div id="profileSection" class="hidden">
+        <div class="profile-box">
+            <h3>Profil</h3>
+            <p id="userInfo"></p>
+            <button onclick="logout()" style="background-color:#f44336;">Se déconnecter</button>
+        </div>
+        <h4>Changer le mot de passe</h4>
+        <input type="password" id="oldPassword" placeholder="Ancien mot de passe">
+        <input type="password" id="newPassword" placeholder="Nouveau mot de passe">
+        <button onclick="changePassword()">Modifier le mot de passe</button>
+        <div id="passwordResult" class="auth-result hidden"></div>
+    </div>
+
+    <button id="historyToggleBtn" onclick="toggleSection('historySection')" class="toggle-btn hidden">Mes prédictions ▼</button>
+    <div id="historySection" class="hidden">
+        <h3>Mes prédictions</h3>
+        <button onclick="loadHistory()">Rafraîchir l'historique</button>
+        <div id="historyContent" class="result"></div>
+    </div>
+
+    <button id="adminToggleBtn" onclick="toggleSection('adminSection')" class="toggle-btn admin hidden">Analyse Admin ▼</button>
+    <div id="adminSection" class="hidden">
+        <h3>Dashboard Admin</h3>
+        <button onclick="loadAdminDashboard()">Charger les métriques</button>
+        <div id="adminContent" class="result"></div>
+    </div>
+
+    <hr style="margin: 30px 0;">
+
+    <div id="predictSection" class="hidden">
+        <h3>Faire une prédiction</h3>
+        <p>Entrez un ID client (ex: 100002)</p>
+        <input type="number" id="clientId" placeholder="SK_ID_CURR" value="100002">
+        <button onclick="predict()">Prédire</button>
+        <div id="result" class="result hidden"></div>
+    </div>
 
     <script>
+        let token = null;
+
+        // Connexion avec la touche Entrée
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("loginUsername").addEventListener("keypress", function(e) {
+                if (e.key === "Enter") login();
+            });
+            document.getElementById("loginPassword").addEventListener("keypress", function(e) {
+                if (e.key === "Enter") login();
+            });
+        });
+
+        function toggleAuth() {
+            const isRegister = document.getElementById("authSwitch").checked;
+            document.getElementById("loginSection").classList.toggle("hidden", isRegister);
+            document.getElementById("registerSection").classList.toggle("hidden", !isRegister);
+            document.getElementById("authResult").classList.add("hidden");
+        }
+
+        function toggleSection(id) {
+            document.getElementById(id).classList.toggle("hidden");
+        }
+
+        async function register() {
+            const username = document.getElementById("regUsername").value.trim();
+            const password = document.getElementById("regPassword").value;
+            if (username.length < 3) return showAuthResult("Nom d'utilisateur trop court (min 3)", true);
+            if (password.length < 6) return showAuthResult("Mot de passe trop court (min 6)", true);
+            if (password.length > 72) return showAuthResult("Mot de passe trop long (max 72)", true);
+
+            const res = await fetch("/register", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({username, password})
+            });
+            const data = await res.json();
+            showAuthResult(res.ok ? `Compte créé (${data.role})` : (data.detail || "Erreur"), !res.ok);
+        }
+
+        async function login() {
+            const username = document.getElementById("loginUsername").value;
+            const password = document.getElementById("loginPassword").value;
+            const res = await fetch("/login", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({username, password})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                token = data.access_token;
+                document.getElementById("switchContainer").classList.add("hidden");
+                document.getElementById("loginSection").classList.add("hidden");
+                document.getElementById("registerSection").classList.add("hidden");
+                document.getElementById("profileToggleBtn").classList.remove("hidden");
+                document.getElementById("historyToggleBtn").classList.remove("hidden");
+                document.getElementById("predictSection").classList.remove("hidden");
+                document.getElementById("userInfo").innerText = `Connecté : ${username} (${data.role})`;
+                document.getElementById("authResult").classList.add("hidden");
+                if (data.role === "admin") {
+                    document.getElementById("adminToggleBtn").classList.remove("hidden");
+                }
+            } else {
+                showAuthResult(data.detail || "Erreur de connexion", true);
+            }
+        }
+
+        function logout() {
+            token = null;
+            ["profileSection", "historySection", "adminSection", "predictSection"].forEach(id => {
+                document.getElementById(id).classList.add("hidden");
+            });
+            ["profileToggleBtn", "historyToggleBtn", "adminToggleBtn"].forEach(id => {
+                document.getElementById(id).classList.add("hidden");
+            });
+            document.getElementById("switchContainer").classList.remove("hidden");
+            document.getElementById("loginSection").classList.remove("hidden");
+            document.getElementById("authSwitch").checked = false;
+            toggleAuth();
+            document.getElementById("authResult").classList.add("hidden");
+            document.getElementById("result").classList.add("hidden");
+        }
+
+        async function changePassword() {
+            if (!token) return;
+            const oldPassword = document.getElementById("oldPassword").value;
+            const newPassword = document.getElementById("newPassword").value;
+            if (newPassword.length < 6) return showPasswordResult("Nouveau mot de passe trop court", true);
+
+            const res = await fetch("/change-password", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "Authorization": `Bearer ${token}`},
+                body: JSON.stringify({old_password: oldPassword, new_password: newPassword})
+            });
+            const data = await res.json();
+            showPasswordResult(res.ok ? data.message : (data.detail || "Erreur"), !res.ok);
+        }
+
         async function predict() {
+            if (!token) return alert("Connectez-vous d'abord");
             const clientId = document.getElementById("clientId").value;
             const resultDiv = document.getElementById("result");
-            resultDiv.style.display = "block";
+            resultDiv.classList.remove("hidden");
             resultDiv.innerHTML = "Chargement...";
 
-            try {
-                const response = await fetch("http://127.0.0.1:8000/predict", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ client_id: parseInt(clientId) })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    resultDiv.innerHTML = `<span class="error">Erreur : ${data.detail}</span>`;
-                    return;
-                }
-
-                resultDiv.innerHTML = `
-                    <strong>Client :</strong> ${data.client_id}<br>
-                    <strong>Probabilité de défaut :</strong> ${(data.probabilite_defaut * 100).toFixed(2)} %<br>
-                    <strong>Risque :</strong> ${data.risque === 1 ? "Élevé" : "Faible"}
-                `;
-            } catch (err) {
-                resultDiv.innerHTML = `<span class="error">Erreur de connexion à l'API</span>`;
+            const res = await fetch("/predict", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "Authorization": `Bearer ${token}`},
+                body: JSON.stringify({client_id: parseInt(clientId)})
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                resultDiv.innerHTML = `<span class="error">${data.detail}</span>`;
+                return;
             }
+            resultDiv.innerHTML = `
+                <strong>Client :</strong> ${data.client_id || "N/A"}<br>
+                <strong>Probabilité de défaut :</strong> ${(data.probabilite_defaut * 100).toFixed(2)} %<br>
+                <strong>Risque :</strong> ${data.risque === 1 ? "Élevé" : "Faible"}
+            `;
+        }
+
+        async function loadHistory() {
+            if (!token) return;
+            const res = await fetch("/my-predictions", {headers: {"Authorization": `Bearer ${token}`}});
+            const data = await res.json();
+            const div = document.getElementById("historyContent");
+            if (!data.predictions || data.predictions.length === 0) {
+                div.innerHTML = "Aucune prédiction.";
+                return;
+            }
+            div.innerHTML = data.predictions.map(p => `
+                <div class="log-item">
+                    ${new Date(p.timestamp).toLocaleString()} — Client: ${p.client_id || "N/A"} 
+                    — ${(p.probabilite_defaut*100).toFixed(1)}% — Risque: ${p.risque}
+                </div>
+            `).join("");
+        }
+
+        async function loadAdminDashboard() {
+            if (!token) return;
+            const res = await fetch("/admin/dashboard", {headers: {"Authorization": `Bearer ${token}`}});
+            if (!res.ok) {
+                document.getElementById("adminContent").innerHTML = "<span class='error'>Accès refusé</span>";
+                return;
+            }
+            const data = await res.json();
+            const m = data.metrics;
+            document.getElementById("adminContent").innerHTML = `
+                <strong>Métriques (24 dernières heures)</strong><br>
+                Total appels : ${m.total_24h}<br>
+                Latence moyenne : ${m.avg_latency_ms} ms<br>
+                Probabilité moyenne : ${(m.avg_proba*100).toFixed(2)} %<br>
+                Erreurs : ${m.errors_24h}<br><br>
+                <strong>Derniers logs</strong><br>
+                ${data.logs.slice(0, 15).map(l => `
+                    <div class="log-item">${l.username} — ${l.client_id || "N/A"} — ${(l.probabilite_defaut*100).toFixed(1)}%</div>
+                `).join("")}
+            `;
+        }
+
+        function showAuthResult(msg, isError) {
+            const div = document.getElementById("authResult");
+            div.classList.remove("hidden");
+            div.innerHTML = isError ? `<span class="error">${msg}</span>` : msg;
+        }
+
+        function showPasswordResult(msg, isError) {
+            const div = document.getElementById("passwordResult");
+            div.classList.remove("hidden");
+            div.innerHTML = isError ? `<span class="error">${msg}</span>` : msg;
         }
     </script>
 </body>
