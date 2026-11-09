@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Scoring Home Credit</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
+        input, button { padding: 10px; margin: 10px 0; width: 100%; }
+        .result { margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Scoring Home Credit</h1>
+    <p>Entrez un ID client (ex: 100002)</p>
+
+    <input type="number" id="clientId" placeholder="SK_ID_CURR" value="100002">
+    <button onclick="predict()">Prédire</button>
+
+    <div id="result" class="result" style="display:none;"></div>
+
+    <script>
+        async function predict() {
+            const clientId = document.getElementById("clientId").value;
+            const resultDiv = document.getElementById("result");
+            resultDiv.style.display = "block";
+            resultDiv.innerHTML = "Chargement...";
+
+            try {
+                const response = await fetch("http://127.0.0.1:8000/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ client_id: parseInt(clientId) })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    resultDiv.innerHTML = `<span class="error">Erreur : ${data.detail}</span>`;
+                    return;
+                }
+
+                resultDiv.innerHTML = `
+                    <strong>Client :</strong> ${data.client_id}<br>
+                    <strong>Probabilité de défaut :</strong> ${(data.probabilite_defaut * 100).toFixed(2)} %<br>
+                    <strong>Risque :</strong> ${data.risque === 1 ? "Élevé" : "Faible"}
+                `;
+            } catch (err) {
+                resultDiv.innerHTML = `<span class="error">Erreur de connexion à l'API</span>`;
+            }
+        }
+    </script>
+</body>
+</html>

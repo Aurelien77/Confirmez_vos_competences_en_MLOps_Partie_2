@@ -51,3 +51,10 @@ def test_predict_avec_features(client):
 def test_predict_sans_donnees(client):
     response = client.post("/predict", json={})
     assert response.status_code == 400
+
+
+def test_frontend_ui(client):
+    response = client.get("/ui")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert b"Scoring Home Credit" in response.content
