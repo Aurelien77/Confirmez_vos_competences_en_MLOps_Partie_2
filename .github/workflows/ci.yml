@@ -116,26 +116,38 @@ jobs:
         run: |
           echo "## Résultats tests Frontend" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
           if [ -f frontend-test-results.xml ]; then
-            # Résumé global
             total=$(grep -oP 'tests="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
             failures=$(grep -oP 'failures="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
             errors=$(grep -oP 'errors="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
             skipped=$(grep -oP 'skipped="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
-            
             echo "### Résumé" >> $GITHUB_STEP_SUMMARY
             echo "| Tests | Réussis | Échecs | Erreurs | Skippés |" >> $GITHUB_STEP_SUMMARY
             echo "|-------|---------|--------|---------|---------|" >> $GITHUB_STEP_SUMMARY
             echo "| $total | $((total - failures - errors - skipped)) | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            
-            # Détail des tests (version plus robuste)
             echo "### Détail des tests" >> $GITHUB_STEP_SUMMARY
-            echo '```xml' >> $GITHUB_STEP_SUMMARY
-            # Affiche les lignes contenant testcase
-            grep "testcase" frontend-test-results.xml | head -20 >> $GITHUB_STEP_SUMMARY || echo "Aucun testcase trouvé" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            python3 - << 'PYEOF'
+          import xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse("frontend-test-results.xml")
+              root = tree.getroot()
+              for testcase in root.iter("testcase"):
+                  name = testcase.get("name", "inconnu")
+                  classname = testcase.get("classname", "")
+                  time_val = testcase.get("time", "0")
+                  status = "PASSED"
+                  if testcase.find("failure") is not None:
+                      status = "FAILED"
+                  elif testcase.find("error") is not None:
+                      status = "ERROR"
+                  elif testcase.find("skipped") is not None:
+                      status = "SKIPPED"
+                  print(f"- **{name}** ({classname}) — {status} — {time_val}s")
+          except Exception as e:
+              print(f"Impossible de parser le XML : {e}")
+          PYEOF
           else
             echo "Aucun fichier de résultats trouvé" >> $GITHUB_STEP_SUMMARY
           fi
