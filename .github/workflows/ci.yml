@@ -13,12 +13,14 @@ jobs:
     outputs:
       backend: ${{ steps.config.outputs.backend }}
       frontend: ${{ steps.config.outputs.frontend }}
+      create_artifact: ${{ steps.config.outputs.create_artifact }}
     steps:
       - uses: actions/checkout@v4
       - id: config
         run: |
           echo "backend=$(yq '.backend' .github/test-config.yml)" >> $GITHUB_OUTPUT
           echo "frontend=$(yq '.frontend' .github/test-config.yml)" >> $GITHUB_OUTPUT
+          echo "create_artifact=$(yq '.create_artifact' .github/test-config.yml)" >> $GITHUB_OUTPUT
 
   test-backend:
     needs: read-config
@@ -158,3 +160,25 @@ jobs:
         with:
           name: frontend-test-results
           path: frontend-test-results.xml
+
+  create-artifact:
+    needs: [read-config, test-backend]
+    if: needs.read-config.outputs.create_artifact == 'true' && needs.test-backend.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create application archive
+        run: |
+          mkdir -p artifact
+          cp -r api/ artifact/
+          cp -r devops/ artifact/
+          cp -r learning_models/ artifact/ 2>/dev/null || true
+          tar -czf application.tar.gz -C artifact .
+
+      - name: Upload application artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-build
+          path: application.tar.gz
+          retention-days: 30
