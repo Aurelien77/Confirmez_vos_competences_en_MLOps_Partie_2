@@ -130,13 +130,11 @@ jobs:
             echo "| $total | $((total - failures - errors - skipped)) | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
-            # Détail des tests
+            # Détail des tests (version plus robuste)
             echo "### Détail des tests" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            # Extrait les noms des tests et leur statut
-            grep -oP 'testcase name="\K[^"]+' frontend-test-results.xml | while read testname; do
-              echo "- $testname" >> $GITHUB_STEP_SUMMARY
-            done
+            echo '```xml' >> $GITHUB_STEP_SUMMARY
+            # Affiche les lignes contenant testcase
+            grep "testcase" frontend-test-results.xml | head -20 >> $GITHUB_STEP_SUMMARY || echo "Aucun testcase trouvé" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           else
             echo "Aucun fichier de résultats trouvé" >> $GITHUB_STEP_SUMMARY
