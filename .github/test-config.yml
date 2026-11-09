@@ -1,2 +1,3 @@
 backend: true
 frontend: true
+create_artifact: true
