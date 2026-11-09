@@ -115,12 +115,33 @@ jobs:
         if: always()
         run: |
           echo "## Résultats tests Frontend" >> $GITHUB_STEP_SUMMARY
-          if [ -f frontend-test-results.xml ]; then
-            echo "Tests frontend exécutés" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Aucun résultat frontend" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
           
+          if [ -f frontend-test-results.xml ]; then
+            # Résumé global
+            total=$(grep -oP 'tests="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
+            failures=$(grep -oP 'failures="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
+            errors=$(grep -oP 'errors="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
+            skipped=$(grep -oP 'skipped="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
+            
+            echo "### Résumé" >> $GITHUB_STEP_SUMMARY
+            echo "| Tests | Réussis | Échecs | Erreurs | Skippés |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------|---------|--------|---------|---------|" >> $GITHUB_STEP_SUMMARY
+            echo "| $total | $((total - failures - errors - skipped)) | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Détail des tests
+            echo "### Détail des tests" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            # Extrait les noms des tests et leur statut
+            grep -oP 'testcase name="\K[^"]+' frontend-test-results.xml | while read testname; do
+              echo "- $testname" >> $GITHUB_STEP_SUMMARY
+            done
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Aucun fichier de résultats trouvé" >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Upload frontend test results
         if: always()
         uses: actions/upload-artifact@v4
