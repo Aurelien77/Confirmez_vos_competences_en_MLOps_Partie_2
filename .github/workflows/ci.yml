@@ -1,0 +1,183 @@
+name: CI - Tests Backend & Frontend
+
+on:
+  push:
+    branches: [staging, stagging]
+  pull_request:
+    branches: [staging, stagging]
+  workflow_dispatch:
+
+jobs:
+  read-config:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.config.outputs.backend }}
+      frontend: ${{ steps.config.outputs.frontend }}
+      create_artifact: ${{ steps.config.outputs.create_artifact }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: config
+        run: |
+          echo "backend=$(yq '.backend' .github/test-config.yml)" >> $GITHUB_OUTPUT
+          echo "frontend=$(yq '.frontend' .github/test-config.yml)" >> $GITHUB_OUTPUT
+          echo "create_artifact=$(yq '.create_artifact' .github/test-config.yml)" >> $GITHUB_OUTPUT
+
+  test-backend:
+    needs: read-config
+    if: needs.read-config.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: scoring
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgomp1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api/backend/requirements.txt
+          pip install pytest pytest-cov httpx
+
+      - name: Run backend tests with coverage
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/scoring
+        run: |
+          pytest api/backend/test_unit.py api/backend/test_integration.py \
+            -v \
+            --cov=api/backend \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:htmlcov \
+            --junitxml=test-results.xml \
+            --ignore=api/backend/test_integration.py::test_frontend_ui
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: test-results.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "## Couverture de code" >> $GITHUB_STEP_SUMMARY
+          coverage report --format=markdown >> $GITHUB_STEP_SUMMARY || true
+
+  test-frontend:
+    needs: read-config
+    if: needs.read-config.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api/backend/requirements.txt
+          pip install pytest httpx
+
+      - name: Run frontend tests
+        run: |
+          pytest api/backend/test_integration.py::test_frontend_ui -v --junitxml=frontend-test-results.xml
+
+      - name: Frontend test summary
+        if: always()
+        run: |
+          echo "## Résultats tests Frontend" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f frontend-test-results.xml ]; then
+            total=$(grep -oP 'tests="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
+            failures=$(grep -oP 'failures="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
+            errors=$(grep -oP 'errors="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
+            skipped=$(grep -oP 'skipped="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
+            echo "### Résumé" >> $GITHUB_STEP_SUMMARY
+            echo "| Tests | Réussis | Échecs | Erreurs | Skippés |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------|---------|--------|---------|---------|" >> $GITHUB_STEP_SUMMARY
+            echo "| $total | $((total - failures - errors - skipped)) | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Détail des tests" >> $GITHUB_STEP_SUMMARY
+            python3 - << 'PYEOF'
+          import xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse("frontend-test-results.xml")
+              root = tree.getroot()
+              for testcase in root.iter("testcase"):
+                  name = testcase.get("name", "inconnu")
+                  classname = testcase.get("classname", "")
+                  time_val = testcase.get("time", "0")
+                  status = "PASSED"
+                  if testcase.find("failure") is not None:
+                      status = "FAILED"
+                  elif testcase.find("error") is not None:
+                      status = "ERROR"
+                  elif testcase.find("skipped") is not None:
+                      status = "SKIPPED"
+                  print(f"- **{name}** ({classname}) — {status} — {time_val}s")
+          except Exception as e:
+              print(f"Impossible de parser le XML : {e}")
+          PYEOF
+          else
+            echo "Aucun fichier de résultats trouvé" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload frontend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: frontend-test-results.xml
+
+  create-artifact:
+    needs: [read-config, test-backend]
+    if: needs.read-config.outputs.create_artifact == 'true' && needs.test-backend.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create application archive
+        run: |
+          mkdir -p artifact
+          cp -r api/ artifact/
+          cp -r devops/ artifact/
+          cp -r learning_models/ artifact/ 2>/dev/null || true
+          tar -czf application.tar.gz -C artifact .
+
+      - name: Upload application artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-build
+          path: application.tar.gz
+          retention-days: 30
