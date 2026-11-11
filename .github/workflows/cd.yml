@@ -19,7 +19,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          workflow: ci.yml
+          workflow: ci-tests.yml
           branch: staging
           name: application-build
           path: ./artifact
