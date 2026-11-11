@@ -52,6 +52,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image name
+        id: meta
+        run: |
+          REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          echo "image_name=${{ env.REGISTRY }}/${REPO}/api" >> $GITHUB_OUTPUT
+
       - name: Build and push API
         uses: docker/build-push-action@v6
         with:
@@ -59,7 +65,8 @@ jobs:
           file: devops/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/{{ github.repository | lower }}/api:latest
+            ${{ steps.meta.outputs.image_name }}:latest
+            ${{ steps.meta.outputs.image_name }}:${{ github.sha }}
 
   deploy:
     needs: [download-artifact, build-and-push]
@@ -90,11 +97,12 @@ jobs:
       - name: Deploy
         working-directory: devops/ansible
         run: |
+          REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
           ansible-playbook -i inventory/hosts.yml playbook_deploy.yml \
             --vault-password-file /tmp/vault_pass.txt \
             -e "registry_user=${{ github.actor }}" \
             -e "registry_token=${{ secrets.GITHUB_TOKEN }}" \
-            -e "ci_registry_image=ghcr.io/${{ github.repository | lower }}"
+            -e "ci_registry_image=${{ env.REGISTRY }}/${REPO}"
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
 
