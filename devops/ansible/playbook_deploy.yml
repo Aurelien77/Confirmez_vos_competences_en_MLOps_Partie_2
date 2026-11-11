@@ -1,0 +1,51 @@
+---
+- name: Déploiement Home Credit Scoring
+  hosts: production
+  become: true
+
+  vars_files:
+    - vault.yml
+
+  vars:
+    app_dir: /app/home-credit-scoring
+    ci_registry_image: "{{ ci_registry_image }}"
+
+  tasks:
+    - name: Créer le dossier dédié de l'application
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ app_dir }}"
+        - "{{ app_dir }}/data"
+        - "{{ app_dir }}/data/learning_models"
+
+    - name: Copier docker-compose.prod.yml
+      copy:
+        src: ../docker-compose.prod.yml
+        dest: "{{ app_dir }}/docker-compose.prod.yml"
+
+    - name: Générer .env.prod
+      template:
+        src: templates/env.prod.j2
+        dest: "{{ app_dir }}/.env.prod"
+        mode: "0600"
+
+    - name: Créer le réseau edge-network s'il n'existe pas
+      shell: |
+        docker network inspect edge-network >/dev/null 2>&1 || \
+        docker network create edge-network
+      changed_when: false
+
+    - name: Login GHCR
+      shell: docker login ghcr.io -u {{ registry_user }} -p {{ registry_token }}
+      no_log: true
+
+    - name: Pull et démarrer la stack dans le dossier dédié
+      shell: |
+        cd {{ app_dir }} && \
+        docker compose --env-file .env.prod -f docker-compose.prod.yml pull && \
+        docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+      environment:
+        CI_REGISTRY_IMAGE: "{{ ci_registry_image }}"
