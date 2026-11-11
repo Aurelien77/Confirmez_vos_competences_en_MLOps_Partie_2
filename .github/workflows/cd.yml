@@ -55,7 +55,7 @@ jobs:
       - name: Set image name
         id: meta
         run: |
-          REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "image_name=${{ env.REGISTRY }}/${REPO}/api" >> $GITHUB_OUTPUT
 
       - name: Build and push API
@@ -97,7 +97,7 @@ jobs:
       - name: Deploy
         working-directory: devops/ansible
         run: |
-          REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           ansible-playbook -i inventory/hosts.yml playbook_deploy.yml \
             --vault-password-file /tmp/vault_pass.txt \
             -e "registry_user=${{ github.actor }}" \
