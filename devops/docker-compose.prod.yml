@@ -1,0 +1,35 @@
+services:
+  api:
+    image: ${CI_REGISTRY_IMAGE}/api:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - db
+    volumes:
+      - /app/home-credit-scoring/data/learning_models:/app/learning_models
+      - /app/home-credit-scoring/data/df_home_credit.pkl:/app/df_home_credit.pkl
+    restart: unless-stopped
+    networks:
+      - edge-network
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - edge-network
+
+volumes:
+  postgres_data:
+
+networks:
+  edge-network:
+    external: true

@@ -25,6 +25,8 @@
         .log-item { border-bottom: 1px solid #eee; padding: 6px 0; font-size: 14px; }
         .toggle-btn { background: #2196F3; }
         .toggle-btn.admin { background: #ff9800; }
+        .sort-buttons { display: flex; gap: 8px; margin-bottom: 10px; }
+        .sort-buttons button { flex: 1; margin: 0; }
     </style>
 </head>
 <body>
@@ -72,7 +74,11 @@
     <button id="historyToggleBtn" onclick="toggleSection('historySection')" class="toggle-btn hidden">Mes prédictions ▼</button>
     <div id="historySection" class="hidden">
         <h3>Mes prédictions</h3>
-        <button onclick="loadHistory()">Rafraîchir l'historique</button>
+        <div class="sort-buttons">
+            <button onclick="loadHistory('recent')">Plus récentes</button>
+            <button onclick="loadHistory('proba_desc')">Proba ↓</button>
+            <button onclick="loadHistory('proba_asc')">Proba ↑</button>
+        </div>
         <div id="historyContent" class="result"></div>
     </div>
 
@@ -95,8 +101,8 @@
 
     <script>
         let token = null;
+        let historyData = [];
 
-        // Connexion avec la touche Entrée
         document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("loginUsername").addEventListener("keypress", function(e) {
                 if (e.key === "Enter") login();
@@ -215,19 +221,27 @@
             `;
         }
 
-        async function loadHistory() {
+        async function loadHistory(sort = "recent") {
             if (!token) return;
             const res = await fetch("/my-predictions", {headers: {"Authorization": `Bearer ${token}`}});
             const data = await res.json();
+            historyData = data.predictions || [];
+
+            if (sort === "proba_desc") {
+                historyData.sort((a, b) => (b.probabilite_defaut || 0) - (a.probabilite_defaut || 0));
+            } else if (sort === "proba_asc") {
+                historyData.sort((a, b) => (a.probabilite_defaut || 0) - (b.probabilite_defaut || 0));
+            }
+
             const div = document.getElementById("historyContent");
-            if (!data.predictions || data.predictions.length === 0) {
+            if (historyData.length === 0) {
                 div.innerHTML = "Aucune prédiction.";
                 return;
             }
-            div.innerHTML = data.predictions.map(p => `
+            div.innerHTML = historyData.map(p => `
                 <div class="log-item">
                     ${new Date(p.timestamp).toLocaleString()} — Client: ${p.client_id || "N/A"} 
-                    — ${(p.probabilite_defaut*100).toFixed(1)}% — Risque: ${p.risque}
+                    — ${(p.probabilite_defaut * 100).toFixed(1)}% — Risque: ${p.risque ?? "N/A"}
                 </div>
             `).join("");
         }
