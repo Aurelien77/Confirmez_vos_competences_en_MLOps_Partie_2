@@ -16,7 +16,6 @@ jobs:
       artifact_found: ${{ steps.check.outputs.found }}
     steps:
       - name: Download latest application artifact from staging
-        id: download
         uses: dawidd6/action-download-artifact@v6
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -31,10 +30,8 @@ jobs:
         run: |
           if [ -f ./artifact/application.tar.gz ]; then
             echo "found=true" >> $GITHUB_OUTPUT
-            echo "Artefact trouvé"
           else
             echo "found=false" >> $GITHUB_OUTPUT
-            echo "Aucun artefact trouvé sur staging"
             exit 1
           fi
 
