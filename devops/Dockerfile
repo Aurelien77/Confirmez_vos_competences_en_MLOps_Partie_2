@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Dépendance système pour LightGBM
+# Dépendances système
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
@@ -11,13 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY api/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Code backend + frontend
+# Code de l'application
 COPY api/backend/ ./api/backend/
 COPY api/frontend/ ./api/frontend/
 
-# Fichiers de données / modèle
-COPY learning_models/ ./learning_models/
-COPY df_home_credit.pkl .
+# Dossier pour les modèles (vide dans l'image, monté en volume)
+RUN mkdir -p /app/learning_models
 
 EXPOSE 8000
 
