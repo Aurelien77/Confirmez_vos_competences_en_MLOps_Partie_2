@@ -20,7 +20,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           workflow: ci-tests.yml
-          branch: staging
+          branch: stagging
           name: application-build
           path: ./artifact
           if_no_artifact_found: warn
