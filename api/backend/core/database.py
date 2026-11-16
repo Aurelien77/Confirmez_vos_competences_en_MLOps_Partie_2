@@ -12,6 +12,7 @@ engine = create_engine(
 
 def init_db():
     with engine.begin() as conn:
+        # Table users
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -21,6 +22,8 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
+
+        # Table prediction_logs
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS prediction_logs (
                 id SERIAL PRIMARY KEY,
@@ -34,4 +37,10 @@ def init_db():
                 status_code INTEGER,
                 error_message TEXT
             )
+        """))
+
+        # Ajoute la colonne username si elle n'existe pas (migration)
+        conn.execute(text("""
+            ALTER TABLE prediction_logs 
+            ADD COLUMN IF NOT EXISTS username VARCHAR(50)
         """))

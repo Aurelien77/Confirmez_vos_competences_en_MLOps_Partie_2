@@ -18,10 +18,22 @@ def register_user(user):
 def login_user(user):
     with engine.connect() as conn:
         result = conn.execute(
-            text("SELECT hashed_password FROM users WHERE username = :u"),
+            text("SELECT hashed_password, is_admin FROM users WHERE username = :u"),
             {"u": user.username}
         ).fetchone()
+    
     if not result or not pwd_context.verify(user.password, result[0]):
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
-    token = create_access_token({"sub": user.username})
-    return {"access_token": token, "token_type": "bearer"}
+    
+    is_admin = bool(result[1])
+    token = create_access_token({
+        "sub": user.username,
+        "role": "admin" if is_admin else "user"
+    })
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "is_admin": is_admin,
+        "username": user.username
+    }

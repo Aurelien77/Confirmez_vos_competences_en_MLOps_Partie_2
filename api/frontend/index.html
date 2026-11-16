@@ -27,10 +27,13 @@
         .toggle-btn.admin { background: #ff9800; }
         .sort-buttons { display: flex; gap: 8px; margin-bottom: 10px; }
         .sort-buttons button { flex: 1; margin: 0; }
+        #userBadge { text-align: center; font-weight: bold; margin: 15px 0; cursor: pointer; color: #2196F3; font-size: 18px; }
+        #userBadge:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <h1>Scoring Home Credit</h1>
+    <div id="userBadge" class="hidden" onclick="toggleSection('profileSection')"></div>
 
     <div class="switch-container" id="switchContainer">
         <span>Connexion</span>
@@ -136,36 +139,43 @@
                 body: JSON.stringify({username, password})
             });
             const data = await res.json();
-            showAuthResult(res.ok ? `Compte créé (${data.role})` : (data.detail || "Erreur"), !res.ok);
+            showAuthResult(res.ok ? `Compte créé (${username})` : (data.detail || "Erreur"), !res.ok);
         }
 
-        async function login() {
-            const username = document.getElementById("loginUsername").value;
-            const password = document.getElementById("loginPassword").value;
-            const res = await fetch("/login", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({username, password})
-            });
-            const data = await res.json();
-            if (res.ok) {
-                token = data.access_token;
-                document.getElementById("switchContainer").classList.add("hidden");
-                document.getElementById("loginSection").classList.add("hidden");
-                document.getElementById("registerSection").classList.add("hidden");
-                document.getElementById("profileToggleBtn").classList.remove("hidden");
-                document.getElementById("historyToggleBtn").classList.remove("hidden");
-                document.getElementById("predictSection").classList.remove("hidden");
-                document.getElementById("userInfo").innerText = `Connecté : ${username} (${data.role})`;
-                document.getElementById("authResult").classList.add("hidden");
-                if (data.role === "admin") {
-                    document.getElementById("adminToggleBtn").classList.remove("hidden");
-                }
-            } else {
-                showAuthResult(data.detail || "Erreur de connexion", true);
-            }
+async function login() {
+    const username = document.getElementById("loginUsername").value;
+    const password = document.getElementById("loginPassword").value;
+    const res = await fetch("/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username, password})
+    });
+    const data = await res.json();
+    if (res.ok) {
+        token = data.access_token;
+        document.getElementById("switchContainer").classList.add("hidden");
+        document.getElementById("loginSection").classList.add("hidden");
+        document.getElementById("registerSection").classList.add("hidden");
+        document.getElementById("profileToggleBtn").classList.remove("hidden");
+        document.getElementById("historyToggleBtn").classList.remove("hidden");
+        document.getElementById("predictSection").classList.remove("hidden");
+        
+        const isAdmin = data.is_admin === true || data.role === "admin";
+        
+        const badge = document.getElementById("userBadge");
+        badge.innerText = `Connecté : ${username}${isAdmin ? " (Admin)" : ""}`;
+        badge.classList.remove("hidden");
+        
+        document.getElementById("userInfo").innerText = `Connecté : ${username}${isAdmin ? " (Admin)" : ""}`;
+        document.getElementById("authResult").classList.add("hidden");
+        
+        if (isAdmin) {
+            document.getElementById("adminToggleBtn").classList.remove("hidden");
         }
-
+    } else {
+        showAuthResult(data.detail || "Erreur de connexion", true);
+    }
+}
         function logout() {
             token = null;
             ["profileSection", "historySection", "adminSection", "predictSection"].forEach(id => {
@@ -174,6 +184,7 @@
             ["profileToggleBtn", "historyToggleBtn", "adminToggleBtn"].forEach(id => {
                 document.getElementById(id).classList.add("hidden");
             });
+            document.getElementById("userBadge").classList.add("hidden");
             document.getElementById("switchContainer").classList.remove("hidden");
             document.getElementById("loginSection").classList.remove("hidden");
             document.getElementById("authSwitch").checked = false;
@@ -204,68 +215,81 @@
             resultDiv.classList.remove("hidden");
             resultDiv.innerHTML = "Chargement...";
 
-            const res = await fetch("/predict", {
-                method: "POST",
-                headers: {"Content-Type": "application/json", "Authorization": `Bearer ${token}`},
-                body: JSON.stringify({client_id: parseInt(clientId)})
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                resultDiv.innerHTML = `<span class="error">${data.detail}</span>`;
-                return;
+            try {
+                const res = await fetch("/predict", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json", "Authorization": `Bearer ${token}`},
+                    body: JSON.stringify({client_id: parseInt(clientId)})
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    resultDiv.innerHTML = `<span class="error">${data.detail || "Erreur"}</span>`;
+                    return;
+                }
+                resultDiv.innerHTML = `
+                    <strong>Client :</strong> ${data.client_id || "N/A"}<br>
+                    <strong>Probabilité de défaut :</strong> ${(data.probabilite_defaut * 100).toFixed(2)} %<br>
+                    <strong>Risque :</strong> ${data.risque === 1 ? "Élevé" : "Faible"}
+                `;
+            } catch (e) {
+                resultDiv.innerHTML = `<span class="error">Erreur de communication</span>`;
             }
-            resultDiv.innerHTML = `
-                <strong>Client :</strong> ${data.client_id || "N/A"}<br>
-                <strong>Probabilité de défaut :</strong> ${(data.probabilite_defaut * 100).toFixed(2)} %<br>
-                <strong>Risque :</strong> ${data.risque === 1 ? "Élevé" : "Faible"}
-            `;
         }
 
         async function loadHistory(sort = "recent") {
             if (!token) return;
-            const res = await fetch("/my-predictions", {headers: {"Authorization": `Bearer ${token}`}});
-            const data = await res.json();
-            historyData = data.predictions || [];
+            try {
+                const res = await fetch("/my-predictions", {headers: {"Authorization": `Bearer ${token}`}});
+                if (!res.ok) throw new Error("Erreur serveur");
+                const data = await res.json();
+                historyData = data.predictions || [];
 
-            if (sort === "proba_desc") {
-                historyData.sort((a, b) => (b.probabilite_defaut || 0) - (a.probabilite_defaut || 0));
-            } else if (sort === "proba_asc") {
-                historyData.sort((a, b) => (a.probabilite_defaut || 0) - (b.probabilite_defaut || 0));
-            }
+                if (sort === "proba_desc") {
+                    historyData.sort((a, b) => (b.probabilite_defaut || 0) - (a.probabilite_defaut || 0));
+                } else if (sort === "proba_asc") {
+                    historyData.sort((a, b) => (a.probabilite_defaut || 0) - (b.probabilite_defaut || 0));
+                }
 
-            const div = document.getElementById("historyContent");
-            if (historyData.length === 0) {
-                div.innerHTML = "Aucune prédiction.";
-                return;
+                const div = document.getElementById("historyContent");
+                if (historyData.length === 0) {
+                    div.innerHTML = "Aucune prédiction.";
+                    return;
+                }
+                div.innerHTML = historyData.map(p => `
+                    <div class="log-item">
+                        ${new Date(p.timestamp).toLocaleString()} — Client: ${p.client_id || "N/A"} 
+                        — ${(p.probabilite_defaut * 100).toFixed(1)}% — Risque: ${p.risque ?? "N/A"}
+                    </div>
+                `).join("");
+            } catch (e) {
+                document.getElementById("historyContent").innerHTML = `<span class="error">Impossible de charger l'historique</span>`;
             }
-            div.innerHTML = historyData.map(p => `
-                <div class="log-item">
-                    ${new Date(p.timestamp).toLocaleString()} — Client: ${p.client_id || "N/A"} 
-                    — ${(p.probabilite_defaut * 100).toFixed(1)}% — Risque: ${p.risque ?? "N/A"}
-                </div>
-            `).join("");
         }
 
         async function loadAdminDashboard() {
             if (!token) return;
-            const res = await fetch("/admin/dashboard", {headers: {"Authorization": `Bearer ${token}`}});
-            if (!res.ok) {
-                document.getElementById("adminContent").innerHTML = "<span class='error'>Accès refusé</span>";
-                return;
+            try {
+                const res = await fetch("/admin/dashboard", {headers: {"Authorization": `Bearer ${token}`}});
+                if (!res.ok) {
+                    document.getElementById("adminContent").innerHTML = "<span class='error'>Accès refusé ou erreur serveur</span>";
+                    return;
+                }
+                const data = await res.json();
+                const m = data.metrics;
+                document.getElementById("adminContent").innerHTML = `
+                    <strong>Métriques (24 dernières heures)</strong><br>
+                    Total appels : ${m.total_24h}<br>
+                    Latence moyenne : ${m.avg_latency_ms} ms<br>
+                    Probabilité moyenne : ${(m.avg_proba*100).toFixed(2)} %<br>
+                    Erreurs : ${m.errors_24h}<br><br>
+                    <strong>Derniers logs</strong><br>
+                    ${data.logs.slice(0, 15).map(l => `
+                        <div class="log-item">${l.username} — ${l.client_id || "N/A"} — ${(l.probabilite_defaut*100).toFixed(1)}%</div>
+                    `).join("")}
+                `;
+            } catch (e) {
+                document.getElementById("adminContent").innerHTML = `<span class="error">Erreur de chargement</span>`;
             }
-            const data = await res.json();
-            const m = data.metrics;
-            document.getElementById("adminContent").innerHTML = `
-                <strong>Métriques (24 dernières heures)</strong><br>
-                Total appels : ${m.total_24h}<br>
-                Latence moyenne : ${m.avg_latency_ms} ms<br>
-                Probabilité moyenne : ${(m.avg_proba*100).toFixed(2)} %<br>
-                Erreurs : ${m.errors_24h}<br><br>
-                <strong>Derniers logs</strong><br>
-                ${data.logs.slice(0, 15).map(l => `
-                    <div class="log-item">${l.username} — ${l.client_id || "N/A"} — ${(l.probabilite_defaut*100).toFixed(1)}%</div>
-                `).join("")}
-            `;
         }
 
         function showAuthResult(msg, isError) {
