@@ -142,3 +142,10 @@ def test_delete_account(client):
     # Vérifie que le compte n'existe plus
     response = client.post("/login", json={"username": "deleteuser", "password": "pass123"})
     assert response.status_code == 401
+
+def test_frontend_ui(client):
+    """Vérifie que le frontend est servi correctement"""
+    response = client.get("/ui")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+    assert b"Scoring Home Credit" in response.content or b"<!DOCTYPE html>" in response.content

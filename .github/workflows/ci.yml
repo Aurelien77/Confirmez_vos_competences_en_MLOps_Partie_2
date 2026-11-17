@@ -2,9 +2,11 @@ name: CI - Tests Backend & Frontend
 
 on:
   push:
-    branches: [staging, stagging]
+    branches:
+      - '*'
   pull_request:
-    branches: [staging, stagging]
+    branches:
+      - '*'
   workflow_dispatch:
 
 jobs:
@@ -28,7 +30,11 @@ jobs:
 
   test-backend:
     needs: read-config
-    if: needs.read-config.outputs.backend == 'true'
+    if: |
+      needs.read-config.outputs.backend == 'true' &&
+      (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/stagging' || 
+       (github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'stagging'))) &&
+      (github.event_name == 'push' || github.event.pull_request.head.ref != 'dev')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -90,7 +96,11 @@ jobs:
 
   test-frontend:
     needs: read-config
-    if: needs.read-config.outputs.frontend == 'true'
+    if: |
+      needs.read-config.outputs.frontend == 'true' &&
+      (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/stagging' || 
+       (github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'stagging'))) &&
+      (github.event_name == 'push' || github.event.pull_request.head.ref != 'dev')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -117,6 +127,30 @@ jobs:
             echo "| Tests | Réussis | Échecs | Erreurs | Skippés |" >> $GITHUB_STEP_SUMMARY
             echo "|-------|---------|--------|---------|---------|" >> $GITHUB_STEP_SUMMARY
             echo "| $total | $((total - failures - errors - skipped)) | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Détail des tests" >> $GITHUB_STEP_SUMMARY
+            python3 - << 'PYEOF'
+          import xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse("frontend-test-results.xml")
+              root = tree.getroot()
+              for testcase in root.iter("testcase"):
+                  name = testcase.get("name", "inconnu")
+                  classname = testcase.get("classname", "")
+                  time_val = testcase.get("time", "0")
+                  status = "PASSED"
+                  if testcase.find("failure") is not None:
+                      status = "FAILED"
+                  elif testcase.find("error") is not None:
+                      status = "ERROR"
+                  elif testcase.find("skipped") is not None:
+                      status = "SKIPPED"
+                  print(f"- **{name}** ({classname}) — {status} — {time_val}s")
+          except Exception as e:
+              print(f"Impossible de parser le XML : {e}")
+          PYEOF
+          else
+            echo "Aucun fichier de résultats trouvé" >> $GITHUB_STEP_SUMMARY
           fi
       - name: Upload frontend test results
         if: always()
@@ -126,8 +160,11 @@ jobs:
           path: frontend-test-results.xml
 
   create-artifact:
-    needs: [read-config, test-backend]
-    if: needs.read-config.outputs.create_artifact == 'true' && needs.test-backend.result == 'success'
+    needs: [read-config, test-backend, test-frontend]
+    if: |
+      needs.read-config.outputs.create_artifact == 'true' &&
+      needs.test-backend.result == 'success' &&
+      needs.test-frontend.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -145,10 +182,12 @@ jobs:
           path: application.tar.gz
           retention-days: 30
 
-  # ====================== VERSIONING ======================
   create-versioned-artifact:
-    needs: [read-config, test-backend]
-    if: needs.read-config.outputs.enable_versioning == 'true' && needs.test-backend.result == 'success'
+    needs: [read-config, test-backend, test-frontend]
+    if: |
+      needs.read-config.outputs.enable_versioning == 'true' &&
+      needs.test-backend.result == 'success' &&
+      needs.test-frontend.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
