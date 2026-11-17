@@ -3,7 +3,7 @@ name: CD - Déploiement Production
 on:
   push:
     branches:
-      - main
+      - '*'
   workflow_dispatch:
 
 env:
@@ -19,7 +19,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          workflow: ci-tests.yml
+          workflow: ci.yml
           branch: stagging
           name: application-build
           path: ./artifact
@@ -32,12 +32,12 @@ jobs:
             echo "found=true" >> $GITHUB_OUTPUT
           else
             echo "found=false" >> $GITHUB_OUTPUT
-            exit 1
+            echo "Aucun artefact trouvé sur stagging — déploiement ignoré"
           fi
 
   build-and-push:
     needs: download-artifact
-    if: needs.download-artifact.outputs.artifact_found == 'true'
+    if: needs.download-artifact.outputs.artifact_found == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -70,7 +70,9 @@ jobs:
 
   deploy:
     needs: [download-artifact, build-and-push]
-    if: needs.download-artifact.outputs.artifact_found == 'true'
+    if: |
+      needs.download-artifact.outputs.artifact_found == 'true' &&
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -108,4 +110,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: rm -f /tmp/vault_pass.txt
+        run: rm -f /tmp/vault_pass.txt ~/.ssh/deploy_key
