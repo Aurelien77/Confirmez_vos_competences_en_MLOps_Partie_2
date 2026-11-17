@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - '*'
-  pull_request:
-    branches:
-      - '*'
   workflow_dispatch:
 
 env:
@@ -36,9 +33,7 @@ jobs:
     needs: read-config
     if: |
       needs.read-config.outputs.backend == 'true' &&
-      (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/stagging' || 
-       (github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'stagging'))) &&
-      (github.event_name == 'push' || github.event.pull_request.head.ref != 'dev')
+      (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/stagging')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -102,9 +97,7 @@ jobs:
     needs: read-config
     if: |
       needs.read-config.outputs.frontend == 'true' &&
-      (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/stagging' || 
-       (github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'stagging'))) &&
-      (github.event_name == 'push' || github.event.pull_request.head.ref != 'dev')
+      (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/stagging')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -199,7 +192,7 @@ jobs:
     outputs:
       artifact_found: ${{ steps.check.outputs.found }}
     steps:
-      - name: Download latest application artifact from staging
+      - name: Download latest successful artifact from stagging
         uses: dawidd6/action-download-artifact@v6
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -208,6 +201,7 @@ jobs:
           name: application-build
           path: ./artifact
           if_no_artifact_found: warn
+          workflow_conclusion: success
 
       - name: List downloaded files
         run: |
