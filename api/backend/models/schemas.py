@@ -53,3 +53,7 @@ class Token(BaseModel):
     token_type: str
     is_admin: bool = False
     username: str = ""
+    
+class ChangePassword(BaseModel):
+    old_password: str
+    new_password: str

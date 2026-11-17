@@ -37,3 +37,43 @@ def login_user(user):
         "is_admin": is_admin,
         "username": user.username
     }
+
+def change_password(username: str, old_password: str, new_password: str):
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT hashed_password FROM users WHERE username = :u"),
+            {"u": username}
+        ).fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+
+        if not pwd_context.verify(old_password, result[0]):
+            raise HTTPException(status_code=400, detail="Ancien mot de passe incorrect")
+
+        new_hash = pwd_context.hash(new_password)
+
+        conn.execute(
+            text("UPDATE users SET hashed_password = :p WHERE username = :u"),
+            {"p": new_hash, "u": username}
+        )
+        conn.commit()
+
+    return {"message": "Mot de passe modifié avec succès"}
+
+def delete_account(username: str):
+    with engine.begin() as conn:
+        # Supprime d'abord les prédictions liées 
+        conn.execute(
+            text("DELETE FROM prediction_logs WHERE username = :u"),
+            {"u": username}
+        )
+        # Supprime l'utilisateur
+        result = conn.execute(
+            text("DELETE FROM users WHERE username = :u"),
+            {"u": username}
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    return {"message": "Compte supprimé avec succès"}
