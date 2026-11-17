@@ -106,6 +106,20 @@ jobs:
        (github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'stagging'))) &&
       (github.event_name == 'push' || github.event.pull_request.head.ref != 'dev')
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: scoring
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -117,6 +131,8 @@ jobs:
           pip install -r api/backend/requirements.txt
           pip install pytest httpx
       - name: Run frontend tests
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/scoring
         run: |
           pytest api/backend/test_integration.py::test_frontend_ui -v --junitxml=frontend-test-results.xml
       - name: Upload frontend test results
