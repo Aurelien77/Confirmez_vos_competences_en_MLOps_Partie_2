@@ -211,8 +211,8 @@ jobs:
 
       - name: List downloaded files
         run: |
-          echo "Contenu du dossier artifact :"
-          ls -la ./artifact/ || echo "Dossier vide ou inexistant"
+          echo "=== Contenu du dossier artifact ==="
+          ls -laR ./artifact/ || echo "Dossier vide ou inexistant"
 
       - name: Check artifact
         id: check
