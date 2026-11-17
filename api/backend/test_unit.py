@@ -1,20 +1,27 @@
-import numpy as np
 import pytest
-
-# Exemple de fonction à tester (tu peux en extraire une dans main.py si besoin)
-def calculer_risque(proba: float, seuil: float = 0.5) -> int:
-    return 1 if proba >= seuil else 0
+from api.backend.models.schemas import PredictionRequest
 
 def test_calculer_risque_faible():
-    assert calculer_risque(0.3) == 0
+    # Test de la logique de seuil (si tu l'extrais)
+    proba = 0.3
+    risque = 1 if proba >= 0.5 else 0
+    assert risque == 0
 
 def test_calculer_risque_eleve():
-    assert calculer_risque(0.7) == 1
+    proba = 0.7
+    risque = 1 if proba >= 0.5 else 0
+    assert risque == 1
 
 def test_calculer_risque_seuil():
-    assert calculer_risque(0.5) == 1
+    proba = 0.5
+    risque = 1 if proba >= 0.5 else 0
+    assert risque == 1
 
 def test_features_manquantes():
-    features = {"AMT_INCOME_TOTAL": 200000}
-    valeur = features.get("EXT_SOURCE_1", np.nan)
-    assert np.isnan(valeur)
+    # Vérifie que le validateur accepte des features partielles
+    req = PredictionRequest(features={"AMT_INCOME_TOTAL": 100000})
+    assert req.features["AMT_INCOME_TOTAL"] == 100000
+
+def test_features_invalides():
+    with pytest.raises(ValueError):
+        PredictionRequest(features={"AMT_INCOME_TOTAL": -1000})
