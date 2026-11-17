@@ -49,3 +49,4 @@ def serve_frontend():
 app.include_router(auth.router)
 app.include_router(predict.router)
 app.include_router(admin.router)
+

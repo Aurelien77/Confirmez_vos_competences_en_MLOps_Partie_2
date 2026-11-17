@@ -29,6 +29,7 @@
         .sort-buttons button { flex: 1; margin: 0; }
         #userBadge { text-align: center; font-weight: bold; margin: 15px 0; cursor: pointer; color: #2196F3; font-size: 18px; }
         #userBadge:hover { text-decoration: underline; }
+        .drift-btn { background-color: #9c27b0 !important; }
     </style>
 </head>
 <body>
@@ -89,6 +90,7 @@
     <div id="adminSection" class="hidden">
         <h3>Dashboard Admin</h3>
         <button onclick="loadAdminDashboard()">Charger les métriques</button>
+        <button onclick="openDriftReport()" class="drift-btn">Rapport de Data Drift</button>
         <div id="adminContent" class="result"></div>
     </div>
 
@@ -142,40 +144,41 @@
             showAuthResult(res.ok ? `Compte créé (${username})` : (data.detail || "Erreur"), !res.ok);
         }
 
-async function login() {
-    const username = document.getElementById("loginUsername").value;
-    const password = document.getElementById("loginPassword").value;
-    const res = await fetch("/login", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({username, password})
-    });
-    const data = await res.json();
-    if (res.ok) {
-        token = data.access_token;
-        document.getElementById("switchContainer").classList.add("hidden");
-        document.getElementById("loginSection").classList.add("hidden");
-        document.getElementById("registerSection").classList.add("hidden");
-        document.getElementById("profileToggleBtn").classList.remove("hidden");
-        document.getElementById("historyToggleBtn").classList.remove("hidden");
-        document.getElementById("predictSection").classList.remove("hidden");
-        
-        const isAdmin = data.is_admin === true || data.role === "admin";
-        
-        const badge = document.getElementById("userBadge");
-        badge.innerText = `Connecté : ${username}${isAdmin ? " (Admin)" : ""}`;
-        badge.classList.remove("hidden");
-        
-        document.getElementById("userInfo").innerText = `Connecté : ${username}${isAdmin ? " (Admin)" : ""}`;
-        document.getElementById("authResult").classList.add("hidden");
-        
-        if (isAdmin) {
-            document.getElementById("adminToggleBtn").classList.remove("hidden");
+        async function login() {
+            const username = document.getElementById("loginUsername").value;
+            const password = document.getElementById("loginPassword").value;
+            const res = await fetch("/login", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({username, password})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                token = data.access_token;
+                document.getElementById("switchContainer").classList.add("hidden");
+                document.getElementById("loginSection").classList.add("hidden");
+                document.getElementById("registerSection").classList.add("hidden");
+                document.getElementById("profileToggleBtn").classList.remove("hidden");
+                document.getElementById("historyToggleBtn").classList.remove("hidden");
+                document.getElementById("predictSection").classList.remove("hidden");
+                
+                const isAdmin = data.is_admin === true || data.role === "admin";
+                
+                const badge = document.getElementById("userBadge");
+                badge.innerText = `Connecté : ${username}${isAdmin ? " (Admin)" : ""}`;
+                badge.classList.remove("hidden");
+                
+                document.getElementById("userInfo").innerText = `Connecté : ${username}${isAdmin ? " (Admin)" : ""}`;
+                document.getElementById("authResult").classList.add("hidden");
+                
+                if (isAdmin) {
+                    document.getElementById("adminToggleBtn").classList.remove("hidden");
+                }
+            } else {
+                showAuthResult(data.detail || "Erreur de connexion", true);
+            }
         }
-    } else {
-        showAuthResult(data.detail || "Erreur de connexion", true);
-    }
-}
+
         function logout() {
             token = null;
             ["profileSection", "historySection", "adminSection", "predictSection"].forEach(id => {
@@ -289,6 +292,31 @@ async function login() {
                 `;
             } catch (e) {
                 document.getElementById("adminContent").innerHTML = `<span class="error">Erreur de chargement</span>`;
+            }
+        }
+
+        async function openDriftReport() {
+            if (!token) return alert("Connectez-vous d'abord");
+            
+            const win = window.open("", "_blank");
+            win.document.write("<h2>Chargement du rapport...</h2>");
+            
+            try {
+                const res = await fetch("/admin/drift", {
+                    headers: {"Authorization": `Bearer ${token}`}
+                });
+                
+                if (!res.ok) {
+                    win.document.body.innerHTML = `<h2>Erreur ${res.status}</h2><p>Accès refusé ou erreur serveur</p>`;
+                    return;
+                }
+                
+                const html = await res.text();
+                win.document.open();
+                win.document.write(html);
+                win.document.close();
+            } catch (e) {
+                win.document.body.innerHTML = "<h2>Erreur de communication</h2>";
             }
         }
 
