@@ -12,6 +12,7 @@ env:
 jobs:
   download-artifact:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     outputs:
       artifact_found: ${{ steps.check.outputs.found }}
     steps:
