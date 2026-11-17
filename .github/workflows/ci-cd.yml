@@ -1,11 +1,16 @@
-name: CI - Tests Backend & Frontend
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [staging, stagging]
+    branches:
+      - '*'
   pull_request:
-    branches: [staging, stagging]
+    branches:
+      - '*'
   workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   read-config:
@@ -26,9 +31,14 @@ jobs:
           echo "enable_versioning=$(yq '.enable_versioning // "false"' .github/test-config.yml)" >> $GITHUB_OUTPUT
           echo "version=$(yq '.version // "dev"' .github/test-config.yml)" >> $GITHUB_OUTPUT
 
+  # ==================== CI ====================
   test-backend:
     needs: read-config
-    if: needs.read-config.outputs.backend == 'true'
+    if: |
+      needs.read-config.outputs.backend == 'true' &&
+      (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/stagging' || 
+       (github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'stagging'))) &&
+      (github.event_name == 'push' || github.event.pull_request.head.ref != 'dev')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -90,7 +100,11 @@ jobs:
 
   test-frontend:
     needs: read-config
-    if: needs.read-config.outputs.frontend == 'true'
+    if: |
+      needs.read-config.outputs.frontend == 'true' &&
+      (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/stagging' || 
+       (github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'stagging'))) &&
+      (github.event_name == 'push' || github.event.pull_request.head.ref != 'dev')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,19 +119,6 @@ jobs:
       - name: Run frontend tests
         run: |
           pytest api/backend/test_integration.py::test_frontend_ui -v --junitxml=frontend-test-results.xml
-      - name: Frontend test summary
-        if: always()
-        run: |
-          echo "## Résultats tests Frontend" >> $GITHUB_STEP_SUMMARY
-          if [ -f frontend-test-results.xml ]; then
-            total=$(grep -oP 'tests="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
-            failures=$(grep -oP 'failures="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
-            errors=$(grep -oP 'errors="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
-            skipped=$(grep -oP 'skipped="\K[0-9]+' frontend-test-results.xml | head -1 || echo 0)
-            echo "| Tests | Réussis | Échecs | Erreurs | Skippés |" >> $GITHUB_STEP_SUMMARY
-            echo "|-------|---------|--------|---------|---------|" >> $GITHUB_STEP_SUMMARY
-            echo "| $total | $((total - failures - errors - skipped)) | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
-          fi
       - name: Upload frontend test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -126,8 +127,11 @@ jobs:
           path: frontend-test-results.xml
 
   create-artifact:
-    needs: [read-config, test-backend]
-    if: needs.read-config.outputs.create_artifact == 'true' && needs.test-backend.result == 'success'
+    needs: [read-config, test-backend, test-frontend]
+    if: |
+      needs.read-config.outputs.create_artifact == 'true' &&
+      needs.test-backend.result == 'success' &&
+      needs.test-frontend.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -145,10 +149,12 @@ jobs:
           path: application.tar.gz
           retention-days: 30
 
-  # ====================== VERSIONING ======================
   create-versioned-artifact:
-    needs: [read-config, test-backend]
-    if: needs.read-config.outputs.enable_versioning == 'true' && needs.test-backend.result == 'success'
+    needs: [read-config, test-backend, test-frontend]
+    if: |
+      needs.read-config.outputs.enable_versioning == 'true' &&
+      needs.test-backend.result == 'success' &&
+      needs.test-frontend.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -168,3 +174,99 @@ jobs:
           name: application-${{ needs.read-config.outputs.version }}
           path: application-*.tar.gz
           retention-days: 90
+
+  # ==================== CD ====================
+  download-artifact:
+    needs: [read-config, create-artifact]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_found: ${{ steps.check.outputs.found }}
+    steps:
+      - name: Download latest application artifact from staging
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: ci-cd.yml
+          branch: stagging
+          name: application-build
+          path: ./artifact
+          if_no_artifact_found: warn
+
+      - name: Check artifact
+        id: check
+        run: |
+          if [ -f ./artifact/application.tar.gz ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-push:
+    needs: download-artifact
+    if: needs.download-artifact.outputs.artifact_found == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set image name
+        id: meta
+        run: |
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image_name=${{ env.REGISTRY }}/${REPO}/api" >> $GITHUB_OUTPUT
+      - name: Build and push API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: devops/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_name }}:latest
+            ${{ steps.meta.outputs.image_name }}:${{ github.sha }}
+
+  deploy:
+    needs: [download-artifact, build-and-push]
+    if: |
+      needs.download-artifact.outputs.artifact_found == 'true' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://scoring.1dream.art
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Ansible
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.PROD_HOST }}" >> ~/.ssh/known_hosts
+      - name: Write vault password
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > /tmp/vault_pass.txt
+      - name: Deploy
+        working-directory: devops/ansible
+        run: |
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          ansible-playbook -i inventory/hosts.yml playbook_deploy.yml \
+            --vault-password-file /tmp/vault_pass.txt \
+            -e "registry_user=${{ github.actor }}" \
+            -e "registry_token=${{ secrets.GITHUB_TOKEN }}" \
+            -e "ci_registry_image=${{ env.REGISTRY }}/${REPO}"
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+      - name: Cleanup
+        if: always()
+        run: rm -f /tmp/vault_pass.txt ~/.ssh/deploy_key
