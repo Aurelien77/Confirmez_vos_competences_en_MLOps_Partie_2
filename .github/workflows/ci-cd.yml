@@ -31,7 +31,7 @@ jobs:
           echo "enable_versioning=$(yq '.enable_versioning // "false"' .github/test-config.yml)" >> $GITHUB_OUTPUT
           echo "version=$(yq '.version // "dev"' .github/test-config.yml)" >> $GITHUB_OUTPUT
 
-  # ==================== CI ====================
+  # ==================== CHEMIN CI ====================
   test-backend:
     needs: read-config
     if: |
@@ -191,9 +191,9 @@ jobs:
           path: application-*.tar.gz
           retention-days: 90
 
-  # ==================== CD ====================
+  # ==================== CHEMIN CD ====================
   download-artifact:
-    needs: [read-config, create-artifact]
+    needs: read-config
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
@@ -216,11 +216,12 @@ jobs:
             echo "found=true" >> $GITHUB_OUTPUT
           else
             echo "found=false" >> $GITHUB_OUTPUT
+            echo "Aucun artefact trouvé sur stagging"
           fi
 
   build-and-push:
     needs: download-artifact
-    if: needs.download-artifact.outputs.artifact_found == 'true' && github.ref == 'refs/heads/main'
+    if: needs.download-artifact.outputs.artifact_found == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -250,9 +251,7 @@ jobs:
 
   deploy:
     needs: [download-artifact, build-and-push]
-    if: |
-      needs.download-artifact.outputs.artifact_found == 'true' &&
-      github.ref == 'refs/heads/main'
+    if: needs.download-artifact.outputs.artifact_found == 'true'
     runs-on: ubuntu-latest
     environment:
       name: production
