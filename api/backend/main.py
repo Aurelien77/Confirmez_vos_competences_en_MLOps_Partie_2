@@ -5,12 +5,14 @@ import pickle
 import pandas as pd
 import os
 from api.backend.core.config import MODEL_PATH, DATA_PATH, FRONTEND_PATH
-from api.backend.core.database import init_db
+from api.backend.core.database import init_db, save_reference_snapshot
 from api.backend.routes import auth, predict, admin
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    save_reference_snapshot()
+    
     model = None
     df = None
 
@@ -49,4 +51,3 @@ def serve_frontend():
 app.include_router(auth.router)
 app.include_router(predict.router)
 app.include_router(admin.router)
-
