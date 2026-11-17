@@ -209,11 +209,17 @@ jobs:
           path: ./artifact
           if_no_artifact_found: warn
 
+      - name: List downloaded files
+        run: |
+          echo "Contenu du dossier artifact :"
+          ls -la ./artifact/ || echo "Dossier vide ou inexistant"
+
       - name: Check artifact
         id: check
         run: |
           if [ -f ./artifact/application.tar.gz ]; then
             echo "found=true" >> $GITHUB_OUTPUT
+            echo "Artefact trouvé"
           else
             echo "found=false" >> $GITHUB_OUTPUT
             echo "Aucun artefact trouvé sur stagging"
