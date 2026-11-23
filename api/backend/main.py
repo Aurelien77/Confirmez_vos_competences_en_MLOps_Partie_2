@@ -8,6 +8,7 @@ from api.backend.core.config import MODEL_PATH, DATA_PATH, FRONTEND_PATH
 from api.backend.core.database import init_db, save_reference_snapshot
 from api.backend.routes import auth, predict, admin
 from fastapi.staticfiles import StaticFiles
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -15,6 +16,7 @@ async def lifespan(app: FastAPI):
     
     model = None
     df = None
+    client_dict = None
 
     if os.path.exists(MODEL_PATH):
         with open(MODEL_PATH, "rb") as f:
@@ -25,12 +27,15 @@ async def lifespan(app: FastAPI):
 
     if os.path.exists(DATA_PATH):
         df = pd.read_pickle(DATA_PATH)
-        print("Données chargées")
+        # Dictionnaire pour un accès ultra-rapide par client_id
+        client_dict = df.set_index("SK_ID_CURR").to_dict(orient="index")
+        print("Données chargées + dictionnaire clients créé")
     else:
         print(f"Données non trouvées : {DATA_PATH}")
 
     app.state.model = model
     app.state.df = df
+    app.state.client_dict = client_dict
     yield
 
 app = FastAPI(

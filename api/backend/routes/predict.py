@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import numpy as np
@@ -20,10 +20,37 @@ class PredictionResponse(BaseModel):
     probabilite_defaut: float
     risque: int
 
+def log_prediction(username, client_id, features_dict, proba, risque, exec_time, status, error):
+    """Écriture asynchrone des logs pour ne pas bloquer la réponse."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO prediction_logs 
+                (username, client_id, features, probabilite_defaut, risque, execution_time_ms, status_code, error_message)
+                VALUES (:username, :client_id, :features, :proba, :risque, :exec_time, :status, :error)
+            """), {
+                "username": username,
+                "client_id": client_id,
+                "features": json.dumps(features_dict) if features_dict else None,
+                "proba": proba,
+                "risque": risque,
+                "exec_time": exec_time,
+                "status": status,
+                "error": error
+            })
+            conn.commit()
+    except Exception:
+        pass
+
 @router.post("/predict", response_model=PredictionResponse)
-def predict(request: PredictionRequest, req: Request, user=Depends(get_current_user)):
+def predict(
+    request: PredictionRequest, 
+    req: Request, 
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user)
+):
     model = req.app.state.model
-    df = req.app.state.df
+    client_dict = req.app.state.client_dict
 
     if model is None:
         raise HTTPException(status_code=500, detail="Modèle non chargé")
@@ -38,21 +65,24 @@ def predict(request: PredictionRequest, req: Request, user=Depends(get_current_u
     error = None
 
     try:
+        t1 = time.time()
         if request.client_id is not None:
-            if df is None:
+            if client_dict is None:
                 raise HTTPException(status_code=503, detail="Données non disponibles")
-            client = df[df["SK_ID_CURR"] == request.client_id]
-            if client.empty:
+
+            client = client_dict.get(request.client_id)
+            if client is None:
                 raise HTTPException(status_code=404, detail=f"Client {request.client_id} non trouvé")
 
             features_dict = {}
             X = []
             for name in feature_names:
-                val = client[name].iloc[0] if name in client.columns else np.nan
+                val = client.get(name, np.nan)
                 X.append(val)
                 features_dict[name] = float(val) if pd.notna(val) else None
             X = np.array([X])
             client_id = request.client_id
+            print(f"[TIMING] Lookup client: {(time.time() - t1)*1000:.1f} ms")
 
         elif request.features is not None:
             features_dict = request.features
@@ -63,8 +93,10 @@ def predict(request: PredictionRequest, req: Request, user=Depends(get_current_u
         else:
             raise HTTPException(status_code=400, detail="Fournir soit client_id, soit features")
 
+        t2 = time.time()
         proba = float(model.predict_proba(X)[0, 1])
         risque = 1 if proba >= 0.5 else 0
+        print(f"[TIMING] Prediction: {(time.time() - t2)*1000:.1f} ms")
 
     except HTTPException as e:
         status = e.status_code
@@ -76,25 +108,12 @@ def predict(request: PredictionRequest, req: Request, user=Depends(get_current_u
         raise HTTPException(status_code=500, detail="Erreur interne")
     finally:
         exec_time = (time.time() - start) * 1000
-        try:
-            with engine.connect() as conn:
-                conn.execute(text("""
-                    INSERT INTO prediction_logs 
-                    (username, client_id, features, probabilite_defaut, risque, execution_time_ms, status_code, error_message)
-                    VALUES (:username, :client_id, :features, :proba, :risque, :exec_time, :status, :error)
-                """), {
-                    "username": user["username"],
-                    "client_id": client_id,
-                    "features": json.dumps(features_dict) if features_dict else None,
-                    "proba": proba,
-                    "risque": risque,
-                    "exec_time": exec_time,
-                    "status": status,
-                    "error": error
-                })
-                conn.commit()
-        except Exception:
-            pass
+        print(f"[TIMING] Total avant logging: {exec_time:.1f} ms")
+        background_tasks.add_task(
+            log_prediction,
+            user["username"], client_id, features_dict,
+            proba, risque, exec_time, status, error
+        )
 
     return {
         "client_id": client_id,

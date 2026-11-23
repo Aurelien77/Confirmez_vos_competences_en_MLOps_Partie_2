@@ -28,7 +28,6 @@ jobs:
           echo "enable_versioning=$(yq '.enable_versioning // "false"' .github/test-config.yml)" >> $GITHUB_OUTPUT
           echo "version=$(yq '.version // "dev"' .github/test-config.yml)" >> $GITHUB_OUTPUT
 
-  # ==================== CHEMIN CI ====================
   test-backend:
     needs: read-config
     if: |
@@ -128,12 +127,56 @@ jobs:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/scoring
         run: |
           pytest api/backend/test_integration.py::test_frontend_ui -v --junitxml=frontend-test-results.xml
+      - name: Frontend test summary
+        if: always()
+        run: |
+          echo "## Résultats des tests frontend" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f frontend-test-results.xml ]; then
+            python3 - << 'PYEOF' >> $GITHUB_STEP_SUMMARY
+          import xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse("frontend-test-results.xml")
+              root = tree.getroot()
+              tests = int(root.get("tests", 0))
+              failures = int(root.get("failures", 0))
+              errors = int(root.get("errors", 0))
+              skipped = int(root.get("skipped", 0))
+              passed = tests - failures - errors - skipped
+
+              print("| Tests | Passés | Échecs | Erreurs | Ignorés |")
+              print("|-------|--------|--------|---------|---------|")
+              print(f"| {tests} | {passed} | {failures} | {errors} | {skipped} |")
+              print("")
+              print("### Détail")
+              print("")
+
+              for testcase in root.iter("testcase"):
+                  name = testcase.get("name", "inconnu")
+                  time_val = testcase.get("time", "0")
+                  status = "PASSED"
+                  if testcase.find("failure") is not None:
+                      status = "FAILED"
+                  elif testcase.find("error") is not None:
+                      status = "ERROR"
+                  elif testcase.find("skipped") is not None:
+                      status = "SKIPPED"
+                  print(f"- **{name}** — {status} — {time_val}s")
+          except Exception as e:
+              print(f"Impossible de parser le XML : {e}")
+          PYEOF
+          else
+            echo "Aucun fichier de résultats frontend trouvé" >> $GITHUB_STEP_SUMMARY
+          fi
       - name: Upload frontend test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frontend-test-results
           path: frontend-test-results.xml
+
+          
 
   create-artifact:
     needs: [read-config, test-backend, test-frontend]
@@ -184,7 +227,7 @@ jobs:
           path: application-*.tar.gz
           retention-days: 90
 
-  # ==================== CHEMIN CD ====================
+  # ==================== CD ====================
   download-artifact:
     needs: read-config
     if: github.ref == 'refs/heads/main'
