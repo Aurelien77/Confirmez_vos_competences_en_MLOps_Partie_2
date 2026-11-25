@@ -19,6 +19,7 @@ class PredictionResponse(BaseModel):
     client_id: Optional[int] = None
     probabilite_defaut: float
     risque: int
+    execution_time_ms: float  # ajouté pour le profiling
 
 def log_prediction(username, client_id, features_dict, proba, risque, exec_time, status, error):
     """Écriture asynchrone des logs pour ne pas bloquer la réponse."""
@@ -55,7 +56,7 @@ def predict(
     if model is None:
         raise HTTPException(status_code=500, detail="Modèle non chargé")
 
-    start = time.time()
+    start = time.perf_counter()
     feature_names = [str(f) for f in model.feature_names_in_]
     features_dict = None
     client_id = None
@@ -65,7 +66,7 @@ def predict(
     error = None
 
     try:
-        t1 = time.time()
+        t1 = time.perf_counter()
         if request.client_id is not None:
             if client_dict is None:
                 raise HTTPException(status_code=503, detail="Données non disponibles")
@@ -82,7 +83,7 @@ def predict(
                 features_dict[name] = float(val) if pd.notna(val) else None
             X = np.array([X])
             client_id = request.client_id
-            print(f"[TIMING] Lookup client: {(time.time() - t1)*1000:.1f} ms")
+            print(f"[TIMING] Lookup client: {(time.perf_counter() - t1)*1000:.1f} ms")
 
         elif request.features is not None:
             features_dict = request.features
@@ -93,10 +94,10 @@ def predict(
         else:
             raise HTTPException(status_code=400, detail="Fournir soit client_id, soit features")
 
-        t2 = time.time()
+        t2 = time.perf_counter()
         proba = float(model.predict_proba(X)[0, 1])
         risque = 1 if proba >= 0.5 else 0
-        print(f"[TIMING] Prediction: {(time.time() - t2)*1000:.1f} ms")
+        print(f"[TIMING] Prediction: {(time.perf_counter() - t2)*1000:.1f} ms")
 
     except HTTPException as e:
         status = e.status_code
@@ -107,7 +108,7 @@ def predict(
         error = str(e)
         raise HTTPException(status_code=500, detail="Erreur interne")
     finally:
-        exec_time = (time.time() - start) * 1000
+        exec_time = (time.perf_counter() - start) * 1000
         print(f"[TIMING] Total avant logging: {exec_time:.1f} ms")
         background_tasks.add_task(
             log_prediction,
@@ -118,5 +119,6 @@ def predict(
     return {
         "client_id": client_id,
         "probabilite_defaut": round(proba, 4),
-        "risque": risque
+        "risque": risque,
+        "execution_time_ms": round(exec_time, 2)
     }
