@@ -153,6 +153,15 @@ def login(user: UserCreate):
             {"username": user.username}
         ).fetchone()
     
+    print(f"=== LOGIN DEBUG ===")
+    print(f"Username: {user.username}")
+    print(f"User found: {result is not None}")
+    if result:
+        print(f"Hash exists: {result[0] is not None}")
+        print(f"Hash start: {str(result[0])[:30]}...")
+        print(f"Password verify: {verify_password(user.password, result[0])}")
+    print(f"===================")
+    
     if not result or not verify_password(user.password, result[0]):
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
     
