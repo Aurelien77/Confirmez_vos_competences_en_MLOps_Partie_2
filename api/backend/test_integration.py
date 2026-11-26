@@ -1,15 +1,10 @@
 import os
-import pytest
-from fastapi.testclient import TestClient
-from api.backend.main import app
-import os
 os.environ["PGCLIENTENCODING"] = "UTF8"
 
 import pytest
 from fastapi.testclient import TestClient
 from api.backend.main import app
 
-# Vérifie si le fichier de données est présent (local ou CI)
 DATA_PATHS = [
     "df_home_credit.pkl",
     "../../df_home_credit.pkl",
@@ -37,7 +32,6 @@ def test_register_login(client):
 
 @pytest.mark.skipif(not DATA_EXISTS, reason="Fichier df_home_credit.pkl non disponible en CI")
 def test_predict_client_id_valide(client):
-    # Login first
     response = client.post("/login", json={"username": "newuser", "password": "password123"})
     token = response.json()["access_token"]
 
@@ -103,15 +97,12 @@ def test_admin_dashboard_forbidden(client):
     assert response.status_code == 403
 
 def test_change_password(client):
-    # Création du compte
     client.post("/register", json={"username": "pwduser", "password": "oldpass123"})
 
-    # Login
     response = client.post("/login", json={"username": "pwduser", "password": "oldpass123"})
     assert response.status_code == 200
     token = response.json()["access_token"]
 
-    # Changement de mot de passe
     response = client.post(
         "/change-password",
         json={"old_password": "oldpass123", "new_password": "newpass456"},
@@ -120,24 +111,19 @@ def test_change_password(client):
     assert response.status_code == 200
     assert response.json()["message"] == "Mot de passe modifié avec succès"
 
-    # Vérifie que l'ancien mot de passe ne fonctionne plus
     response = client.post("/login", json={"username": "pwduser", "password": "oldpass123"})
     assert response.status_code == 401
 
-    # Vérifie que le nouveau mot de passe fonctionne
     response = client.post("/login", json={"username": "pwduser", "password": "newpass456"})
     assert response.status_code == 200
     assert "access_token" in response.json()
 
 def test_delete_account(client):
-    # Création du compte
     client.post("/register", json={"username": "deleteuser", "password": "pass123"})
 
-    # Login
     response = client.post("/login", json={"username": "deleteuser", "password": "pass123"})
     token = response.json()["access_token"]
 
-    # Suppression du compte
     response = client.delete(
         "/account",
         headers={"Authorization": f"Bearer {token}"}
@@ -145,12 +131,10 @@ def test_delete_account(client):
     assert response.status_code == 200
     assert response.json()["message"] == "Compte supprimé avec succès"
 
-    # Vérifie que le compte n'existe plus
     response = client.post("/login", json={"username": "deleteuser", "password": "pass123"})
     assert response.status_code == 401
 
 def test_frontend_ui(client):
-    """Vérifie que le frontend est servi correctement"""
     response = client.get("/ui")
     assert response.status_code == 200
     assert "text/html" in response.headers.get("content-type", "")
