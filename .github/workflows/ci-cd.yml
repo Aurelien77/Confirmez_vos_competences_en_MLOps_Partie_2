@@ -93,6 +93,7 @@ jobs:
       - name: Run backend tests with coverage
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/scoring
+          PYTHONPATH: .
         run: |
           pytest api/backend/test_unit.py api/backend/test_integration.py \
             -v \
@@ -185,6 +186,7 @@ jobs:
       - name: Run frontend tests
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/scoring
+          PYTHONPATH: .
         run: |
           pytest api/frontend/test_frontend.py -v --junitxml=frontend-test-results.xml
       - name: Frontend test summary
