@@ -2,6 +2,12 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 from api.backend.main import app
+import os
+os.environ["PGCLIENTENCODING"] = "UTF8"
+
+import pytest
+from fastapi.testclient import TestClient
+from api.backend.main import app
 
 # Vérifie si le fichier de données est présent (local ou CI)
 DATA_PATHS = [
