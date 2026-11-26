@@ -200,20 +200,22 @@ jobs:
           try:
               tree = ET.parse("frontend-test-results.xml")
               root = tree.getroot()
-              tests = int(root.get("tests", 0))
-              failures = int(root.get("failures", 0))
-              errors = int(root.get("errors", 0))
-              skipped = int(root.get("skipped", 0))
-              passed = tests - failures - errors - skipped
+              
+              testcases = list(root.iter("testcase"))
+              total = len(testcases)
+              failures = sum(1 for t in testcases if t.find("failure") is not None)
+              errors = sum(1 for t in testcases if t.find("error") is not None)
+              skipped = sum(1 for t in testcases if t.find("skipped") is not None)
+              passed = total - failures - errors - skipped
 
               print("| Tests | Passés | Échecs | Erreurs | Ignorés |")
               print("|-------|--------|--------|---------|---------|")
-              print(f"| {tests} | {passed} | {failures} | {errors} | {skipped} |")
+              print(f"| {total} | {passed} | {failures} | {errors} | {skipped} |")
               print("")
               print("### Détail des tests")
               print("")
 
-              for testcase in root.iter("testcase"):
+              for testcase in testcases:
                   name = testcase.get("name", "inconnu")
                   classname = testcase.get("classname", "")
                   time_val = testcase.get("time", "0")
