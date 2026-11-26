@@ -187,7 +187,7 @@ def change_password(data: PasswordChange, user=Depends(get_current_user)):
         )
         conn.commit()
     
-    return {"message": "Mot de passe modifié"}
+    return {"message": "Mot de passe modifié avec succès"}
 
 @app.delete("/account")
 def delete_account(user=Depends(get_current_user)):
@@ -202,7 +202,7 @@ def delete_account(user=Depends(get_current_user)):
         )
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
-    return {"message": "Compte supprimé"}
+    return {"message": "Compte supprimé avec succès"}
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest, user=Depends(get_current_user)):
