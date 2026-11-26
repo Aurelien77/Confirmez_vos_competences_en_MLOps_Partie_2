@@ -1,5 +1,5 @@
 backend: true
 frontend: true
 create_artifact: true
-enable_versioning: false          
+enable_versioning: true         
 version: "1.0.0"

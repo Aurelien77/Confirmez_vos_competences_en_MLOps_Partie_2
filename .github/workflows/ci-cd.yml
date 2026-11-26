@@ -176,8 +176,6 @@ jobs:
           name: frontend-test-results
           path: frontend-test-results.xml
 
-          
-
   create-artifact:
     needs: [read-config, test-backend, test-frontend]
     if: |
@@ -201,31 +199,39 @@ jobs:
           path: application.tar.gz
           retention-days: 30
 
-  create-versioned-artifact:
+  # ==================== SEMANTIC RELEASE ====================
+  semantic-release:
     needs: [read-config, test-backend, test-frontend]
     if: |
       needs.read-config.outputs.enable_versioning == 'true' &&
+      github.ref == 'refs/heads/main' &&
       needs.test-backend.result == 'success' &&
       needs.test-frontend.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
     steps:
       - uses: actions/checkout@v4
-      - name: Create versioned artifact
-        run: |
-          VERSION="${{ needs.read-config.outputs.version }}"
-          mkdir -p artifact
-          cp -r api/ artifact/
-          cp -r devops/ artifact/
-          cp -r learning_models/ artifact/ 2>/dev/null || true
-          echo "Version: $VERSION" > artifact/VERSION
-          echo "Commit: ${{ github.sha }}" >> artifact/VERSION
-          tar -czf application-${VERSION}.tar.gz -C artifact .
-      - name: Upload versioned artifact
-        uses: actions/upload-artifact@v4
         with:
-          name: application-${{ needs.read-config.outputs.version }}
-          path: application-*.tar.gz
-          retention-days: 90
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install semantic-release
+        run: npm install -g semantic-release @semantic-release/changelog @semantic-release/git @semantic-release/github
+      - name: Run semantic-release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx semantic-release
 
   # ==================== CD ====================
   download-artifact:
@@ -263,7 +269,7 @@ jobs:
           fi
 
   build-and-push:
-    needs: download-artifact
+    needs: [download-artifact, semantic-release]
     if: needs.download-artifact.outputs.artifact_found == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -291,6 +297,7 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image_name }}:latest
             ${{ steps.meta.outputs.image_name }}:${{ github.sha }}
+            ${{ needs.semantic-release.outputs.new_release_version != '' && format('{0}:{1}', steps.meta.outputs.image_name, needs.semantic-release.outputs.new_release_version) || '' }}
 
   deploy:
     needs: [download-artifact, build-and-push]
