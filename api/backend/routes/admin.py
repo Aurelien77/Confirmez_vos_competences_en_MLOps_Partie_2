@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import HTMLResponse
 from sqlalchemy import text
 from api.backend.core.database import engine
 from api.backend.core.security import get_current_user, require_admin
+from api.backend.monitoring.drift_analysis import generate_drift_report
 
 router = APIRouter()
 
@@ -45,3 +47,8 @@ def admin_dashboard(user=Depends(require_admin)):
             "errors_24h": metrics[3] or 0
         }
     }
+
+@router.get("/admin/drift", response_class=HTMLResponse, summary="Rapport de data drift")
+def get_drift_report(user=Depends(require_admin)):
+    html = generate_drift_report()
+    return HTMLResponse(content=html)

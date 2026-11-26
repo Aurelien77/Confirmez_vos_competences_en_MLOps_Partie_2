@@ -28,7 +28,6 @@ jobs:
           echo "enable_versioning=$(yq '.enable_versioning // "false"' .github/test-config.yml)" >> $GITHUB_OUTPUT
           echo "version=$(yq '.version // "dev"' .github/test-config.yml)" >> $GITHUB_OUTPUT
 
-  # ==================== CHEMIN CI ====================
   test-backend:
     needs: read-config
     if: |
@@ -128,6 +127,48 @@ jobs:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/scoring
         run: |
           pytest api/backend/test_integration.py::test_frontend_ui -v --junitxml=frontend-test-results.xml
+      - name: Frontend test summary
+        if: always()
+        run: |
+          echo "## Résultats des tests frontend" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f frontend-test-results.xml ]; then
+            python3 - << 'PYEOF' >> $GITHUB_STEP_SUMMARY
+          import xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse("frontend-test-results.xml")
+              root = tree.getroot()
+              tests = int(root.get("tests", 0))
+              failures = int(root.get("failures", 0))
+              errors = int(root.get("errors", 0))
+              skipped = int(root.get("skipped", 0))
+              passed = tests - failures - errors - skipped
+
+              print("| Tests | Passés | Échecs | Erreurs | Ignorés |")
+              print("|-------|--------|--------|---------|---------|")
+              print(f"| {tests} | {passed} | {failures} | {errors} | {skipped} |")
+              print("")
+              print("### Détail")
+              print("")
+
+              for testcase in root.iter("testcase"):
+                  name = testcase.get("name", "inconnu")
+                  time_val = testcase.get("time", "0")
+                  status = "PASSED"
+                  if testcase.find("failure") is not None:
+                      status = "FAILED"
+                  elif testcase.find("error") is not None:
+                      status = "ERROR"
+                  elif testcase.find("skipped") is not None:
+                      status = "SKIPPED"
+                  print(f"- **{name}** — {status} — {time_val}s")
+          except Exception as e:
+              print(f"Impossible de parser le XML : {e}")
+          PYEOF
+          else
+            echo "Aucun fichier de résultats frontend trouvé" >> $GITHUB_STEP_SUMMARY
+          fi
       - name: Upload frontend test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -158,33 +199,41 @@ jobs:
           path: application.tar.gz
           retention-days: 30
 
-  create-versioned-artifact:
+  # ==================== SEMANTIC RELEASE ====================
+  semantic-release:
     needs: [read-config, test-backend, test-frontend]
     if: |
       needs.read-config.outputs.enable_versioning == 'true' &&
+      github.ref == 'refs/heads/main' &&
       needs.test-backend.result == 'success' &&
       needs.test-frontend.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
     steps:
       - uses: actions/checkout@v4
-      - name: Create versioned artifact
-        run: |
-          VERSION="${{ needs.read-config.outputs.version }}"
-          mkdir -p artifact
-          cp -r api/ artifact/
-          cp -r devops/ artifact/
-          cp -r learning_models/ artifact/ 2>/dev/null || true
-          echo "Version: $VERSION" > artifact/VERSION
-          echo "Commit: ${{ github.sha }}" >> artifact/VERSION
-          tar -czf application-${VERSION}.tar.gz -C artifact .
-      - name: Upload versioned artifact
-        uses: actions/upload-artifact@v4
         with:
-          name: application-${{ needs.read-config.outputs.version }}
-          path: application-*.tar.gz
-          retention-days: 90
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install semantic-release
+        run: npm install -g semantic-release @semantic-release/changelog @semantic-release/git @semantic-release/github
+      - name: Run semantic-release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx semantic-release
 
-  # ==================== CHEMIN CD ====================
+  # ==================== CD ====================
   download-artifact:
     needs: read-config
     if: github.ref == 'refs/heads/main'
@@ -220,7 +269,7 @@ jobs:
           fi
 
   build-and-push:
-    needs: download-artifact
+    needs: [download-artifact, semantic-release]
     if: needs.download-artifact.outputs.artifact_found == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -248,6 +297,7 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image_name }}:latest
             ${{ steps.meta.outputs.image_name }}:${{ github.sha }}
+            ${{ needs.semantic-release.outputs.new_release_version != '' && format('{0}:{1}', steps.meta.outputs.image_name, needs.semantic-release.outputs.new_release_version) || '' }}
 
   deploy:
     needs: [download-artifact, build-and-push]
