@@ -100,8 +100,7 @@ jobs:
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-report=html:htmlcov \
-            --junitxml=test-results.xml \
-            --ignore=api/backend/test_integration.py::test_frontend_ui
+            --junitxml=test-results.xml
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -187,7 +186,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/scoring
         run: |
-          pytest api/backend/test_integration.py::test_frontend_ui -v --junitxml=frontend-test-results.xml
+          pytest api/frontend/test_frontend.py -v --junitxml=frontend-test-results.xml
       - name: Frontend test summary
         if: always()
         run: |
