@@ -189,6 +189,21 @@ def change_password(data: PasswordChange, user=Depends(get_current_user)):
     
     return {"message": "Mot de passe modifié"}
 
+@app.delete("/account")
+def delete_account(user=Depends(get_current_user)):
+    with engine.begin() as conn:
+        conn.execute(
+            text("DELETE FROM prediction_logs WHERE username = :username"),
+            {"username": user["username"]}
+        )
+        result = conn.execute(
+            text("DELETE FROM users WHERE username = :username"),
+            {"username": user["username"]}
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    return {"message": "Compte supprimé"}
+
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest, user=Depends(get_current_user)):
     start_total = time.perf_counter()
