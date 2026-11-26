@@ -22,13 +22,15 @@ MODEL_PATH = os.path.join(BASE_DIR, "learning_models", "modele_lgbm.pkl")
 DATA_PATH = os.path.join(BASE_DIR, "df_home_credit.pkl")
 FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend", "index.html")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://postgres:postgres@localhost:5432/scoring")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/scoring")
 engine = create_engine(
-    DATABASE_URL, 
+    DATABASE_URL,
     pool_pre_ping=True,
-    connect_args={"client_encoding": "utf8"}
+    connect_args={
+        "client_encoding": "utf8",
+        "options": "-c client_encoding=utf8"
+    }
 )
-
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
@@ -231,9 +233,15 @@ def predict(request: PredictionRequest, user=Depends(get_current_user)):
     else:
         raise HTTPException(status_code=400, detail="Fournir soit client_id, soit features")
 
-    # Temps d'inférence
+# Temps d'inférence
     start_inference = time.perf_counter()
-    proba = float(model.predict_proba(X)[0, 1])
+    try:
+        proba = float(model.predict_proba(X)[0, 1])
+    except Exception as e:
+        raise HTTPException(
+            status_code=422, 
+            detail=f"Données invalides pour le modèle : {str(e)}"
+        )
     inference_time_ms = (time.perf_counter() - start_inference) * 1000
 
     total_time_ms = (time.perf_counter() - start_total) * 1000
