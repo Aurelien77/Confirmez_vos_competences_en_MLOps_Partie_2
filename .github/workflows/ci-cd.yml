@@ -162,7 +162,7 @@ jobs:
               id SERIAL PRIMARY KEY,
               username VARCHAR(50) UNIQUE NOT NULL,
               hashed_password VARCHAR(255) NOT NULL,
-              role VARCHAR(20) DEFAULT 'user',
+              is_admin BOOLEAN DEFAULT FALSE,
               created_at TIMESTAMP DEFAULT NOW()
           );
 
