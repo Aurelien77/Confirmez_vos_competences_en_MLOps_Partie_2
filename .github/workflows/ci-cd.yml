@@ -54,12 +54,17 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgomp1
+        run: sudo apt-get update && sudo apt-get install -y libgomp1 postgresql-client
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r api/backend/requirements.txt
           pip install pytest pytest-cov httpx
+      - name: Initialize database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d scoring -f devops/postgres/init.sql
       - name: Run backend tests with coverage
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/scoring
@@ -119,9 +124,15 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
           python -m pip install --upgrade pip
           pip install -r api/backend/requirements.txt
           pip install pytest httpx
+      - name: Initialize database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d scoring -f devops/postgres/init.sql
       - name: Run frontend tests
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/scoring
@@ -149,11 +160,12 @@ jobs:
               print("|-------|--------|--------|---------|---------|")
               print(f"| {tests} | {passed} | {failures} | {errors} | {skipped} |")
               print("")
-              print("### Détail")
+              print("### Détail des tests")
               print("")
 
               for testcase in root.iter("testcase"):
                   name = testcase.get("name", "inconnu")
+                  classname = testcase.get("classname", "")
                   time_val = testcase.get("time", "0")
                   status = "PASSED"
                   if testcase.find("failure") is not None:
@@ -162,7 +174,9 @@ jobs:
                       status = "ERROR"
                   elif testcase.find("skipped") is not None:
                       status = "SKIPPED"
+                  
                   print(f"- **{name}** — {status} — {time_val}s")
+                  print(f"  - Fichier : `{classname}`")
           except Exception as e:
               print(f"Impossible de parser le XML : {e}")
           PYEOF
@@ -199,7 +213,6 @@ jobs:
           path: application.tar.gz
           retention-days: 30
 
-  # ==================== SEMANTIC RELEASE ====================
   semantic-release:
     needs: [read-config, test-backend, test-frontend]
     if: |
@@ -233,7 +246,6 @@ jobs:
         run: |
           npx semantic-release
 
-  # ==================== CD ====================
   download-artifact:
     needs: read-config
     if: github.ref == 'refs/heads/main'
@@ -251,12 +263,10 @@ jobs:
           path: ./artifact
           if_no_artifact_found: warn
           workflow_conclusion: success
-
       - name: List downloaded files
         run: |
           echo "=== Contenu du dossier artifact ==="
           ls -laR ./artifact/ || echo "Dossier vide ou inexistant"
-
       - name: Check artifact
         id: check
         run: |
@@ -297,7 +307,6 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image_name }}:latest
             ${{ steps.meta.outputs.image_name }}:${{ github.sha }}
-            ${{ needs.semantic-release.outputs.new_release_version != '' && format('{0}:{1}', steps.meta.outputs.image_name, needs.semantic-release.outputs.new_release_version) || '' }}
 
   deploy:
     needs: [download-artifact, build-and-push]
