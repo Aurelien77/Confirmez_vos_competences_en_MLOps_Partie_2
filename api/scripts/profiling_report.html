@@ -1,0 +1,57 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Rapport Profiling - API Scoring</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 10px; }
+        h1 { color: #333; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+        .stat-box { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-box strong { display: block; font-size: 1.4em; color: #2196F3; }
+        canvas { margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Rapport de Profiling - API Scoring</h1>
+        <p>Généré le 25/11/2026 09:12</p>
+        
+        <div class="stats">
+            <div class="stat-box"><strong>33</strong>Requêtes</div>
+            <div class="stat-box"><strong>264.76 ms</strong>Temps moyen</div>
+            <div class="stat-box"><strong>71.74 ms</strong>Temps médian</div>
+            <div class="stat-box"><strong>2200.57 ms</strong>Temps max</div>
+            <div class="stat-box"><strong>2</strong>Erreurs (6.06%)</div>
+        </div>
+
+        <canvas id="timeChart" height="100"></canvas>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('timeChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['23/11 11:03', '23/11 10:31', '23/11 10:30', '23/11 10:21', '23/11 10:19', '23/11 10:07', '23/11 10:07', '23/11 10:07', '23/11 09:50', '20/11 09:16', '20/11 09:16', '20/11 09:14', '20/11 09:02', '19/11 10:05', '19/11 09:56', '19/11 09:54', '19/11 09:54', '19/11 09:53', '19/11 09:53', '19/11 09:52', '19/11 09:51', '19/11 09:50', '19/11 09:47', '19/11 09:46', '19/11 09:43', '19/11 09:43', '19/11 09:35', '19/11 08:31', '19/11 08:27', '19/11 08:27', '19/11 08:23', '19/11 08:17', '19/11 08:15'],
+                datasets: [{
+                    label: 'Temps d\'exécution (ms)',
+                    data: [107.82814025878906, 9.735107421875, 2200.572729110718, 20.23482322692871, 2150.087833404541, 16.242027282714844, 71.73585891723633, 63.68756294250488, 339.9639129638672, 13.572931289672852, 154.56056594848633, 398.2856273651123, 772.9413509368896, 310.9562397003174, 11.436939239501953, 7.363080978393555, 45.3798770904541, 15.632152557373047, 6.418466567993164, 11.002302169799805, 157.58228302001953, 107.98001289367676, 9.842157363891602, 84.05160903930664, 105.67736625671387, 42.10472106933594, 241.45984649658203, 161.05222702026367, 11.015892028808594, 11.270999908447266, 118.26300621032715, 54.250478744506836, 905.0049781799316],
+                    borderColor: '#2196F3',
+                    tension: 0.3,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: { display: true, text: 'Temps de réponse (50 dernières requêtes)' }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

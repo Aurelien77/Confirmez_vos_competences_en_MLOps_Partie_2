@@ -2,6 +2,12 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 from api.backend.main import app
+import os
+os.environ["PGCLIENTENCODING"] = "UTF8"
+
+import pytest
+from fastapi.testclient import TestClient
+from api.backend.main import app
 
 # Vérifie si le fichier de données est présent (local ou CI)
 DATA_PATHS = [
@@ -106,7 +112,7 @@ def test_change_password(client):
     token = response.json()["access_token"]
 
     # Changement de mot de passe
-    response = client.put(
+    response = client.post(
         "/change-password",
         json={"old_password": "oldpass123", "new_password": "newpass456"},
         headers={"Authorization": f"Bearer {token}"}

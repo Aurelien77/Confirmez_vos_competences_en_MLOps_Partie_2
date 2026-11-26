@@ -1,0 +1,26 @@
+body { font-family: Arial, sans-serif; max-width: 650px; margin: 40px auto; padding: 20px; }
+h1 { text-align: center; }
+.switch-container { text-align: center; margin: 20px 0; }
+.switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+.slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+input:checked + .slider { background-color: #2196F3; }
+input:checked + .slider:before { transform: translateX(26px); }
+.form-section { margin-top: 20px; }
+input, button { width: 100%; padding: 12px; margin: 8px 0; box-sizing: border-box; }
+button { background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+button:hover { background-color: #45a049; }
+.result, .auth-result { margin-top: 15px; padding: 12px; background: #f9f9f9; border-radius: 5px; }
+.error { color: red; }
+.hidden { display: none; }
+.label { font-weight: bold; margin-bottom: 5px; display: block; }
+.profile-box { background: #f0f8ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+.log-item { border-bottom: 1px solid #eee; padding: 6px 0; font-size: 14px; }
+.toggle-btn { background: #2196F3; }
+.toggle-btn.admin { background: #ff9800; }
+.sort-buttons { display: flex; gap: 8px; margin-bottom: 10px; }
+.sort-buttons button { flex: 1; margin: 0; }
+#userBadge { text-align: center; font-weight: bold; margin: 15px 0; cursor: pointer; color: #2196F3; font-size: 18px; }
+#userBadge:hover { text-decoration: underline; }
+.drift-btn { background-color: #9c27b0 !important; }
