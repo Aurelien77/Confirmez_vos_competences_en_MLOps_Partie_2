@@ -247,6 +247,7 @@ jobs:
     needs: [read-config, test-backend, test-frontend]
     if: |
       needs.read-config.outputs.create_artifact == 'true' &&
+      (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/stagging') &&
       needs.test-backend.result == 'success' &&
       needs.test-frontend.result == 'success'
     runs-on: ubuntu-latest
@@ -267,12 +268,10 @@ jobs:
           retention-days: 30
 
   semantic-release:
-    needs: [read-config, test-backend, test-frontend]
+    needs: [read-config]
     if: |
       needs.read-config.outputs.enable_versioning == 'true' &&
-      github.ref == 'refs/heads/main' &&
-      needs.test-backend.result == 'success' &&
-      needs.test-frontend.result == 'success'
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -333,7 +332,9 @@ jobs:
 
   build-and-push:
     needs: [download-artifact, semantic-release]
-    if: needs.download-artifact.outputs.artifact_found == 'true'
+    if: |
+      github.ref == 'refs/heads/main' &&
+      needs.download-artifact.outputs.artifact_found == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -363,7 +364,9 @@ jobs:
 
   deploy:
     needs: [download-artifact, build-and-push]
-    if: needs.download-artifact.outputs.artifact_found == 'true'
+    if: |
+      github.ref == 'refs/heads/main' &&
+      needs.download-artifact.outputs.artifact_found == 'true'
     runs-on: ubuntu-latest
     environment:
       name: production
